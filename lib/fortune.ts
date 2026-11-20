@@ -82,6 +82,11 @@ function yearPillarGanZhi(year: number) {
   return `${eight.getYearGan()}${eight.getYearZhi()}`;
 }
 
+/** 某公历年立春之后的年柱干支（用于按立春口径归年）。 */
+export function getYearPillarGanZhi(year: number) {
+  return yearPillarGanZhi(year);
+}
+
 export function getFlowStartYear(now = new Date()): number {
   const calendarYear = now.getFullYear();
   const todayEight = Solar.fromDate(now).getLunar().getEightChar();

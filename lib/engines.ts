@@ -160,7 +160,11 @@ function normalizeStar(star: any, type: ZiweiStar["type"]): ZiweiStar {
 
 function buildZiwei(date: Date, gender: BirthProfile["gender"]): ZiweiChart {
   const dateString = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-  const chart = astro.bySolar(dateString, hourBranchIndex(date.getHours()), gender, true, "zh-CN");
+  // iztro 的 timeIndex：0 为早子时（00:00–00:59），12 为晚子时（23:00–23:59）。
+  // 晚子时必须传 12——二者星曜落宫不同，与八字侧 sect 2（晚子时算当日）口径一致。
+  const hour = date.getHours();
+  const timeIndex = hour === 23 ? 12 : hourBranchIndex(hour);
+  const chart = astro.bySolar(dateString, timeIndex, gender, true, "zh-CN");
 
   return {
     solarDate: chart.solarDate,

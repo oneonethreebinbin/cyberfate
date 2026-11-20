@@ -3,7 +3,7 @@ import type { BaziPillar, FateChart, ZiweiPalace } from "@/lib/types";
 import {
   branchHeTransform, findFullXing, findTrines, isHaiPair, isPoPair, isSelfXing, isXingPair,
 } from "@/lib/combinations";
-import { getFlowStartYear } from "@/lib/fortune";
+import { getFlowStartYear, getYearPillarGanZhi } from "@/lib/fortune";
 
 const LIU_HE = ["子丑", "寅亥", "卯戌", "辰酉", "巳申", "午未"];
 const CHONG = ["子午", "丑未", "寅申", "卯酉", "辰戌", "巳亥"];
@@ -103,7 +103,9 @@ export function getDayBranchRelations(chart: FateChart): DayBranchRelations {
 }
 
 /**
- * 紫微大限与流年宫：大限按虚岁落在哪一宫，流年宫为流年地支所落之宫。
+ * 紫微大限与流年宫：大限按虚岁落宫，流年宫为流年地支所落之宫。
+ * 虚岁以立春增岁：出生即一岁，此后每逢立春加一岁——1 月 1 日至立春之间不计新岁，
+ * 与流年立春边界同一口径，避免跨年时大限宫提前一年切换。
  */
 export function getZiweiPeriods(chart: FateChart, now = new Date()): {
   virtualAge: number;
@@ -111,8 +113,11 @@ export function getZiweiPeriods(chart: FateChart, now = new Date()): {
   liuNian: ZiweiPalace | null;
   liuNianZhi: string;
 } {
-  const birthYear = Number(chart.profile.date.slice(0, 4));
-  const virtualAge = now.getFullYear() - birthYear + 1;
+  // 出生所在的传统流年（立春口径）：八字年柱若非出生公历年的年柱，则属上一流年。
+  const calendarYear = Number(chart.profile.date.slice(0, 4));
+  const birthPillar = `${chart.bazi.pillars[0].gan}${chart.bazi.pillars[0].zhi}`;
+  const birthFlowYear = birthPillar === getYearPillarGanZhi(calendarYear) ? calendarYear : calendarYear - 1;
+  const virtualAge = getFlowStartYear(now) - birthFlowYear + 1;
   const daXian = chart.ziwei.palaces.find((palace) => palace.decadal[0] <= virtualAge && virtualAge <= palace.decadal[1]) ?? null;
   const flowYear = getFlowStartYear(now);
   const flowEight = Solar.fromYmdHms(flowYear, 6, 15, 12, 0, 0).getLunar().getEightChar();
