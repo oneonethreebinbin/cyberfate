@@ -17,6 +17,25 @@ export interface SolarCorrection {
   minutes: number;
   equationOfTime: number;
   longitudeOffset: number;
+  dstMinutes: number;
+}
+
+export interface DaYunItem {
+  startYear: number;
+  endYear: number;
+  startAge: number;
+  ganZhi: string;
+}
+
+export type StrengthVerdict = "身强" | "身弱" | "中和";
+
+export interface DayMasterStrength {
+  verdict: StrengthVerdict;
+  score: number;
+  commandNote: string;
+  evidence: string[];
+  favorable: string[];
+  unfavorable: string[];
 }
 
 export interface BaziPillar {
@@ -41,6 +60,8 @@ export interface BaziChart {
   taiYuan: string;
   xunKong: string;
   elementCounts: Record<string, number>;
+  strength: DayMasterStrength;
+  daYun: DaYunItem[];
 }
 
 export interface ZiweiStar {

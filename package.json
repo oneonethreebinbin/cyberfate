@@ -1,6 +1,6 @@
 {
   "name": "cyberfate",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.119.1",
     "iztro": "^2.6.1",
     "lunar-javascript": "^1.7.7",
     "next": "^16.0.3",

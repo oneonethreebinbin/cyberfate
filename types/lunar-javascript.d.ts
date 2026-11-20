@@ -8,5 +8,6 @@ declare module "lunar-javascript" {
       minute: number,
       second: number,
     ): any;
+    fromDate(date: Date): any;
   };
 }

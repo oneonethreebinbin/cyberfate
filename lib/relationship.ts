@@ -1,5 +1,8 @@
 import { Solar } from "lunar-javascript";
-import type { FateChart } from "@/lib/types";
+import type { FateChart, ZiweiPalace } from "@/lib/types";
+import { getFlowStartYear } from "@/lib/fortune";
+import { getPalaceNetwork, flyPalaceTransformations, type FlownTransformation } from "@/lib/insights";
+import { isHaiPair, isXingPair } from "@/lib/combinations";
 
 const STEM_ELEMENT: Record<string, string> = {
   甲: "木", 乙: "木", 丙: "火", 丁: "火", 戊: "土", 己: "土", 庚: "金", 辛: "金", 壬: "水", 癸: "水",
@@ -33,6 +36,9 @@ export interface RelationshipSignal {
   value: string;
   detail: string;
   evidence: string;
+  alternative: string;
+  limits: string;
+  reflection: string;
   tone: "jade" | "gold" | "vermilion" | "neutral";
 }
 
@@ -46,22 +52,33 @@ export interface RelationshipYear {
 export interface SingleRelationshipReport {
   spousePalace: string;
   spouseElement: string;
+  spouseDirection: "喜" | "忌" | "平";
   peachBranch: string;
   couplePalace: FateChart["ziwei"]["palaces"][number];
+  coupleOpposite: ZiweiPalace | null;
+  coupleBorrowed: string[];
+  coupleTrineMajors: string[];
+  coupleFlies: { stem: string; flies: FlownTransformation[] };
   signals: RelationshipSignal[];
   timeline: RelationshipYear[];
 }
 
-export function analyzeSingleRelationship(chart: FateChart, startYear = new Date().getFullYear()): SingleRelationshipReport {
+export function analyzeSingleRelationship(chart: FateChart, startYear = getFlowStartYear()): SingleRelationshipReport {
   const dayBranch = chart.bazi.pillars[2].zhi;
   const branches = chart.bazi.pillars.map((pillar) => pillar.zhi);
   const spouse = spouseElement(chart);
   const peach = peachBlossom(dayBranch);
   const spouseCount = chart.bazi.elementCounts[spouse] ?? 0;
-  const couplePalace = chart.ziwei.palaces.find((palace) => palace.name === "夫妻") ?? chart.ziwei.palaces[0];
+  const strength = chart.bazi.strength;
+  // 扶抑定配偶星喜忌：身强任财官为喜，身弱财官为忌，中和随具体组合。
+  const spouseDirection: "喜" | "忌" | "平" = strength.verdict === "身强" ? "喜" : strength.verdict === "身弱" ? "忌" : "平";
+  const network = getPalaceNetwork(chart, "夫妻");
+  const couplePalace = network.target;
   const coupleMajor = couplePalace.stars.filter((star) => star.type === "major").map((star) => star.name);
   const combined = branches.filter((branch) => pairIn(LIU_HE, dayBranch, branch)).length;
   const clashes = branches.filter((branch) => pairIn(CHONG, dayBranch, branch)).length;
+  const punishments = branches.filter((branch) => branch !== dayBranch && isXingPair(dayBranch, branch)).length;
+  const harms = branches.filter((branch) => branch !== dayBranch && isHaiPair(dayBranch, branch)).length;
 
   const signals: RelationshipSignal[] = [
     {
@@ -69,31 +86,52 @@ export function analyzeSingleRelationship(chart: FateChart, startYear = new Date
       value: `${dayBranch}支`,
       detail: combined ? `与原局存在 ${combined} 处六合联系，关系议题容易与生活结构联动。` : "原局未见明显六合，关系节奏更依赖双方后天经营。",
       evidence: `八字 · 日支${dayBranch}为夫妻宫`,
+      alternative: "六合不代表必然和谐；未见六合，也不代表缺少建立关系的能力。",
+      limits: "已纳入日支直接六合与刑害；三合、破以及流月触发未纳入。",
+      reflection: "关系推进时，是否常与居住、工作或家庭节奏的调整同时发生？",
       tone: combined ? "jade" : "neutral",
     },
     {
       title: "配偶星线索",
       value: `${spouse} · ${spouseCount ? "有显" : "表层不显"}`,
       detail: spouseCount ? `四柱表层出现${spouse}五行 ${spouseCount} 次，可继续结合藏干与月令判断。` : `四柱表层未见${spouse}五行，不代表没有缘分，需进一步观察藏干与运限。`,
-      evidence: `八字 · ${chart.profile.gender === "男" ? "财星" : "官杀"}取${spouse}`, tone: spouseCount ? "gold" : "neutral",
+      evidence: `八字 · ${chart.profile.gender === "男" ? "财星" : "官杀"}取${spouse}`,
+      alternative: "表层有显不等于关系稳定，表层不显也不等于没有缘分。",
+      limits: `当前只统计四柱表层五行，未计算藏干权重、月令旺衰与大运。配偶星喜忌为扶抑简法：日主${strength.verdict}，财官${spouseDirection === "喜" ? "为喜用，可任财官" : spouseDirection === "忌" ? "为忌，逢之先补印比" : "喜忌随具体组合"}。`,
+      reflection: "你实际重视的伴侣特质，是否与这套传统取法描述的角色相符？",
+      tone: spouseCount ? "gold" : "neutral",
     },
     {
       title: "桃花触发点",
       value: `${peach}支`,
       detail: branches.includes(peach) ? `原局包含${peach}，社交吸引议题较容易被看见。` : `原局表层未见${peach}，逢${peach}的运年可重点观察社交变化。`,
-      evidence: `八字 · 以日支${dayBranch}查咸池`, tone: branches.includes(peach) ? "vermilion" : "neutral",
+      evidence: `八字 · 以日支${dayBranch}查咸池`,
+      alternative: "桃花也可能表现为社交曝光、审美表达或人际吸引，不只指恋爱。",
+      limits: "日支查咸池所得为墙外桃花；墙内桃花须以年支另查，年支神煞组合与实际社交环境未纳入。",
+      reflection: "社交更活跃时，你会主动连接，还是更需要留出独处和筛选空间？",
+      tone: branches.includes(peach) ? "vermilion" : "neutral",
     },
     {
       title: "紫微夫妻宫",
-      value: `${couplePalace.ganZhi} · ${coupleMajor.join("、") || "空宫"}`,
-      detail: coupleMajor.length ? `夫妻宫主星为${coupleMajor.join("、")}，解读时还需连同命宫、福德宫及三方四正。` : "夫妻宫为空宫，应借对宫并结合三方四正观察，不单以空宫下结论。",
-      evidence: `紫微 · ${couplePalace.ganZhi}夫妻宫`, tone: "gold",
+      value: `${couplePalace.ganZhi} · ${coupleMajor.join("、") || `空宫借${network.opposite?.name ?? "对宫"}`}`,
+      detail: coupleMajor.length ? `夫妻宫主星为${coupleMajor.join("、")}，解读时还需连同命宫、福德宫及三方四正。` : `夫妻宫为空宫，借对宫${network.opposite?.name ?? ""}主星${network.borrowedMajors.join("、") || "（对宫亦无主星）"}观察，并结合三方四正。`,
+      evidence: `紫微 · ${couplePalace.ganZhi}夫妻宫`,
+      alternative: "单宫或主星不能概括一段关系；借星只是观察的拐杖，不代表星曜真正入宫。",
+      limits: "当前已借对宫主星并列三方会照，但未展开四化飞星、自化与运限叠盘。",
+      reflection: "现实关系中，你最需要协商的是亲密距离、责任分配，还是成长节奏？",
+      tone: "gold",
     },
     {
       title: "关系张力",
-      value: clashes ? `${clashes} 处冲动` : "表层平稳",
-      detail: clashes ? "冲不必然等于分离，也可能表现为关系推进、环境变化或边界重建。" : "四柱地支未见夫妻宫直接相冲，仍需结合岁运判断具体变化。",
-      evidence: `八字 · 日支与其余三支合冲`, tone: clashes ? "vermilion" : "jade",
+      value: [clashes ? `${clashes} 处冲动` : "", punishments ? `${punishments} 处相刑` : "", harms ? `${harms} 处相害` : ""].filter(Boolean).join(" · ") || "表层平稳",
+      detail: clashes || punishments || harms
+        ? `冲主动荡推进，刑主磨砺规则，害主暗损摩擦；三者都可能表现为关系推进、环境变化或边界重建。`
+        : "四柱地支未见夫妻宫直接合冲刑害，仍需结合岁运判断具体变化。",
+      evidence: `八字 · 日支与其余三支合冲刑害`,
+      alternative: "冲刑害都不必然是负面；没有直接相冲相刑，现实中仍然可能存在冲突。",
+      limits: "只检查日支与其余三支的直接六冲、相刑、相害；三刑全象与时运推演见时运页，此处未重复展开。",
+      reflection: "面对关系变化时，你更倾向快速调整，还是先建立稳定计划？",
+      tone: clashes || punishments ? "vermilion" : "jade",
     },
   ];
 
@@ -109,6 +147,8 @@ export function analyzeSingleRelationship(chart: FateChart, startYear = new Date
     if (pairIn(LIU_HE, dayBranch, zhi)) { active += 2; reasons.push(`流年与夫妻宫${dayBranch}六合`); }
     if (STEM_ELEMENT[gan] === spouse) { active += 1; reasons.push(`流年天干显${spouse}配偶星`); }
     if (pairIn(CHONG, dayBranch, zhi)) { turning += 2; reasons.push(`流年冲动夫妻宫${dayBranch}`); }
+    if (isXingPair(zhi, dayBranch)) { turning += 1; reasons.push(`流年${zhi}刑夫妻宫${dayBranch}，磨砺与规则类议题留意`); }
+    if (isHaiPair(zhi, dayBranch)) { turning += 1; reasons.push(`流年${zhi}害夫妻宫${dayBranch}，琐碎摩擦留意`); }
     if (!reasons.length) reasons.push("未见表层强触发，适合观察日常关系积累");
     return {
       year,
@@ -118,7 +158,19 @@ export function analyzeSingleRelationship(chart: FateChart, startYear = new Date
     } as RelationshipYear;
   });
 
-  return { spousePalace: dayBranch, spouseElement: spouse, peachBranch: peach, couplePalace, signals, timeline };
+  return {
+    spousePalace: dayBranch,
+    spouseElement: spouse,
+    spouseDirection,
+    peachBranch: peach,
+    couplePalace,
+    coupleOpposite: network.opposite,
+    coupleBorrowed: network.borrowedMajors,
+    coupleTrineMajors: network.trineMajors,
+    coupleFlies: flyPalaceTransformations(chart, "夫妻宫"),
+    signals,
+    timeline,
+  };
 }
 
 export interface CompatibilityDimension {
@@ -126,6 +178,8 @@ export interface CompatibilityDimension {
   status: "协同" | "互补" | "中性" | "需经营";
   detail: string;
   evidence: string;
+  question: string;
+  limits: string;
 }
 
 export interface CompatibilityReport {
@@ -159,30 +213,40 @@ export function analyzeCompatibility(a: FateChart, b: FateChart): CompatibilityR
       status: stemCombined || branchCombined ? "协同" : generates ? "互补" : "中性",
       detail: stemCombined ? `双方日干${aDay.gan}${bDay.gan}形成五合，容易产生彼此关注的牵引。` : branchCombined ? `双方夫妻宫${aDay.zhi}${bDay.zhi}形成六合，关系连接感较明显。` : generates ? `双方日主${aElement}${bElement}相生，互动中容易形成支持与补位。` : "日柱未见直接合局，吸引力更依赖共同经历与现实互动。",
       evidence: `双方日柱：${aDay.gan}${aDay.zhi} / ${bDay.gan}${bDay.zhi}`,
+      question: "现实中，你们最容易因什么靠近：表达方式、共同目标，还是一起经历的事情？",
+      limits: "这里只比较双方日干五合、日支六合与日主五行关系。",
     },
     {
       name: "沟通节奏",
       status: aElement === bElement ? "协同" : generates ? "互补" : controls ? "需经营" : "中性",
       detail: aElement === bElement ? `双方日主同属${aElement}，理解方式可能较接近，也要留意相似盲点。` : generates ? "五行相生提供自然的给予—回应路径，但应避免固定为单向付出。" : controls ? "日主五行存在相克关系，容易形成推动，也可能被体验为压力或挑剔。" : "五行关系没有直接生克，需要通过明确表达建立沟通习惯。",
       evidence: `日主五行：${a.bazi.dayMaster} / ${b.bazi.dayMaster}`,
+      question: "出现分歧时，谁更常主动解释，谁更容易沉默或暂时退出？",
+      limits: "五行生克不是沟通能力测量，仍需以真实互动为准。",
     },
     {
       name: "冲突触发",
       status: branchClash ? "需经营" : branchCombined ? "协同" : "中性",
       detail: branchClash ? `双方日支${aDay.zhi}${bDay.zhi}相冲，重要议题上可能节奏相反；冲也可能带来快速推进和改变。` : branchCombined ? "双方日支六合，处理分歧时较容易寻找共同立场。" : "夫妻宫之间无直接合冲，冲突更取决于具体生活分工与沟通方式。",
       evidence: "双方日支合冲关系",
+      question: "重复出现的冲突更常围绕时间、金钱、家庭，还是边界？",
+      limits: "这里只检查双方日支的直接六合与六冲。",
     },
     {
       name: "长期结构",
       status: (a.bazi.elementCounts[reportB.spouseElement] ?? 0) && (b.bazi.elementCounts[reportA.spouseElement] ?? 0) ? "互补" : "中性",
       detail: `A 的配偶星取${reportA.spouseElement}，B 的配偶星取${reportB.spouseElement}。是否适合长期关系，还需要现实价值观、责任分配与人生阶段验证。`,
       evidence: "双方配偶星与五行分布",
+      question: "你们对责任、忠诚、生活方式和未来计划的定义是否一致？",
+      limits: "当前只读取表层配偶星五行，无法替代价值观与现实条件核对。",
     },
     {
       name: "时间协调",
       status: sharedYears.length ? "协同" : "中性",
       detail: sharedYears.length ? `未来五年双方共同出现关系触发信号的年份有 ${sharedYears.join("、")}，适合留意共同计划与关系变化。` : "未来五年的表层触发年份暂未重合，不等于关系无发展，个人选择与现实条件更关键。",
       evidence: "双方夫妻宫、桃花位与流年表层触发",
+      question: "这些年份是否刚好面对共同计划、距离变化或生活压力？",
+      limits: "仅比较未来五年表层流年，未纳入大运、流月和真实事件。",
     },
   ];
 
