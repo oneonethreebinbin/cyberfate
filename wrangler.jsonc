@@ -1,0 +1,11 @@
+{
+  // Cloudflare Workers 静态站点配置
+  // 部署 next build 产出的静态文件（out/ 目录）
+  "name": "cyberfate",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./out",
+    // 静态导出包含 404.html，未命中路由时返回它
+    "not_found_handling": "404-page"
+  }
+}
