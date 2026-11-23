@@ -7,6 +7,8 @@ import type { BirthProfile, FateChart, Gender } from "@/lib/types";
 import { DateTimeField } from "@/components/DateTimeField";
 import { TerminologyPanel } from "@/components/TerminologyPanel";
 import { CITY_OPTIONS } from "@/lib/locations";
+import { downloadShareCard, renderCompatibilityShareCard } from "@/lib/share-card";
+import { trackLocalEvent } from "@/lib/product";
 
 type RelationshipMode = "single" | "compatibility";
 
@@ -173,6 +175,8 @@ function SingleReport({ chart, savedSourceIds, onSaveObservation }: {
 
 function CompatibilityResult({ report, aName, bName, approximate }: { report: CompatibilityReport; aName: string; bName: string; approximate: boolean }) {
   const [copied, setCopied] = useState(false);
+  const [cardBusy, setCardBusy] = useState(false);
+  const [cardNotice, setCardNotice] = useState("");
   const dimensions = approximate ? report.dimensions.slice(0, 3) : report.dimensions;
 
   async function copySummary() {
@@ -198,6 +202,21 @@ function CompatibilityResult({ report, aName, bName, approximate }: { report: Co
     window.setTimeout(() => setCopied(false), 2200);
   }
 
+  async function downloadCard() {
+    setCardBusy(true);
+    setCardNotice("");
+    try {
+      const blob = await renderCompatibilityShareCard({ report, aName, bName, approximate });
+      downloadShareCard(blob, `cyberfate-合盘-${(aName || "A")}×${(bName || "B")}.png`);
+      trackLocalEvent("share_card_saved");
+      setCardNotice("分享卡片已保存到下载目录");
+    } catch {
+      setCardNotice("分享卡片生成失败，可改用复制脱敏摘要");
+    } finally {
+      setCardBusy(false);
+    }
+  }
+
   return (
     <div className="compatibility-result">
       <section className="compatibility-hero">
@@ -205,7 +224,11 @@ function CompatibilityResult({ report, aName, bName, approximate }: { report: Co
         <div className="name-pair"><h2>{aName || "A"}</h2><i><small>关系结构</small><b>{report.relationLabel}</b></i><h2>{bName || "B"}</h2></div>
         <p>{report.headline}</p>
         {approximate && <div className="compatibility-limited"><b>有限比较</b><span>对方时辰未知，仅保留双方日柱的吸引、沟通和冲突结构；紫微、配偶星强弱与时间协调不展示。</span></div>}
-        <button className="share-summary-button" onClick={copySummary}>{copied ? "摘要已复制" : "复制脱敏摘要"}</button>
+        <div className="share-summary-actions">
+          <button className="share-summary-button" onClick={copySummary}>{copied ? "摘要已复制" : "复制脱敏摘要"}</button>
+          <button className="share-summary-button secondary" disabled={cardBusy} onClick={downloadCard}>{cardBusy ? "正在生成" : "保存分享卡片"}</button>
+        </div>
+        {cardNotice && <p className="share-card-notice" role="status">{cardNotice}</p>}
       </section>
       <section className="dimension-list">
         {dimensions.map((dimension, index) => (
