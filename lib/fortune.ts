@@ -54,7 +54,7 @@ export interface FortuneReport {
   missing: string[];
 }
 
-function classify(scores: FortuneYear["scores"]): FortuneState {
+export function classify(scores: FortuneYear["scores"]): FortuneState {
   if (scores.support >= 2 && scores.pressure >= 2) return "mixed";
   if (scores.movement >= 3) return "change";
   if (scores.pressure >= 3) return "caution";
@@ -63,7 +63,7 @@ function classify(scores: FortuneYear["scores"]): FortuneState {
   return "quiet";
 }
 
-function stateGuidance(state: FortuneState) {
+export function stateGuidance(state: FortuneState) {
   const guidance: Record<FortuneState, { counterpoint: string; observation: string }> = {
     favorable: { counterpoint: "得势不等于无需准备；助力也可能伴随责任与投入增加。", observation: "可观察已筹备事项是否更易获得回应，并继续核对现实成本。" },
     caution: { counterpoint: "受制不必然是灾祸，也可能表现为规则、责任或专业要求提高。", observation: "重大决定宜分阶段推进，提前准备备选方案与求助资源。" },
@@ -261,7 +261,7 @@ export function buildFortuneReport(chart: FateChart, startYear = getFlowStartYea
     dayBranch: chart.bazi.pillars[2].zhi,
     strength: chart.bazi.strength,
     currentDaYun,
-    included: ["流年干支", "月令旺衰定喜忌", "现行大运与岁运关系", "日主五行生克", "六合合化（化神透干/得令简判）", "三合全半", "日支刑害破与三刑全象", "原局表层合冲刑"],
-    missing: ["化气后的旺衰重估", "大运藏干透出", "流月流日", "藏干权重（表层近似）", "大限流年四化叠盘", "调候用神与格局"],
+    included: ["流年干支", "月令旺衰定喜忌", "现行大运与岁运关系", "流日干支与日支关系", "日主五行生克", "六合合化（化神透干/得令简判）", "三合全半", "日支刑害破与三刑全象", "原局表层合冲刑"],
+    missing: ["化气后的旺衰重估", "大运藏干透出", "流月", "流时", "藏干权重（表层近似）", "大限流年四化叠盘", "调候用神与格局"],
   };
 }

@@ -1684,3 +1684,7 @@ fieldset legend small { margin-left: 5px; color: #818b87; font-size: 11px; font-
   .terms-hero h1 { font-size: 40px; }
   .terms-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- daily observation card ---- */
+.fortune-daily .fortune-daily-fine { color: var(--paper-muted); font-size: 13px; line-height: 1.6; margin: 14px 0 0; }
+.fortune-daily .fortune-save { margin-top: 14px; }

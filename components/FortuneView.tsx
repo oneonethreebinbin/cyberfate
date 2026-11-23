@@ -1,4 +1,5 @@
 import { FORTUNE_STATE_META, buildFortuneReport, type FortuneState } from "@/lib/fortune";
+import { analyzeDaily, DAILY_STATE_META } from "@/lib/daily";
 import type { FateChart } from "@/lib/types";
 import { TerminologyPanel } from "@/components/TerminologyPanel";
 
@@ -22,6 +23,10 @@ export function FortuneView({ chart, savedSourceIds = [], onSaveObservation }: {
 }) {
   const report = buildFortuneReport(chart);
   const currentMeta = FORTUNE_STATE_META[report.current.state];
+  const daily = analyzeDaily(chart);
+  const dailyMeta = DAILY_STATE_META[daily.state];
+  const dailySourceId = `daily-${daily.date}`;
+  const dailySaved = savedSourceIds.includes(dailySourceId);
 
   return (
     <div className="view-stack fortune-view">
@@ -50,6 +55,26 @@ export function FortuneView({ chart, savedSourceIds = [], onSaveObservation }: {
           <span>取象依据</span>
           <ul>{report.current.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
           <p><b>反向提醒</b>{report.current.counterpoint}</p>
+        </div>
+      </section>
+
+      <section className={`fortune-hero state-${daily.state} fortune-daily`}>
+        <div className="fortune-orbit" aria-hidden="true">
+          <i /><i /><span>{daily.ganZhi}</span><b>{dailyMeta.seal}</b><small>今日</small>
+        </div>
+        <div className="fortune-current-copy">
+          <span>流日观察 · {daily.date} {daily.ganZhi}</span>
+          <h2>{dailyMeta.label}</h2>
+          <p className="fortune-subtitle">{dailyMeta.subtitle}</p>
+          <p>{dailyMeta.explanation}</p>
+          <ScoreStrip scores={daily.scores} />
+        </div>
+        <div className="fortune-current-evidence">
+          <span>取象依据</span>
+          <ul>{daily.evidence.map((item) => <li key={item}>{item}</li>)}</ul>
+          <p><b>反向提醒</b>{daily.counterpoint}</p>
+          <p className="fortune-daily-fine">流日只观当日表层信号，未纳入流时与当日真太阳时修正；一日之象不足以定事，宜与流年、大运同参。</p>
+          {onSaveObservation && <button className={dailySaved ? "fortune-save saved" : "fortune-save"} disabled={dailySaved} onClick={() => onSaveObservation(dailySourceId, `流日 ${daily.ganZhi} · ${dailyMeta.label}`, daily.observation, daily.date)}>{dailySaved ? "已加入观测簿" : "记下今日"}</button>}
         </div>
       </section>
 
