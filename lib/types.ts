@@ -5,6 +5,8 @@ export interface BirthProfile {
   name: string;
   date: string;
   time: string;
+  /** false 时使用正午作为临时计算坐标，所有依赖时辰的结论必须标为未定。 */
+  timeKnown?: boolean;
   gender: Gender;
   longitude: number;
   useTrueSolarTime: boolean;

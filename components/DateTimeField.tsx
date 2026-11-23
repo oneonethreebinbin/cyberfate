@@ -1,16 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 interface DateTimeFieldProps {
   label: string;
   type: "date" | "time";
   value: string;
   onChange: (value: string) => void;
+  min?: string;
+  max?: string;
 }
 
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
-const YEARS = Array.from({ length: 201 }, (_, index) => 1900 + index);
 const HOURS = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
 const MINUTES = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
 
@@ -18,8 +19,10 @@ function pad(value: number | string) {
   return String(value).padStart(2, "0");
 }
 
-export function DateTimeField({ label, type, value, onChange }: DateTimeFieldProps) {
+export function DateTimeField({ label, type, value, onChange, min = "1900-01-01", max }: DateTimeFieldProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const labelId = useId();
   const [open, setOpen] = useState(false);
   const dateParts = useMemo(() => value.split("-").map(Number), [value]);
   const timeParts = useMemo(() => value.split(":"), [value]);
@@ -27,6 +30,9 @@ export function DateTimeField({ label, type, value, onChange }: DateTimeFieldPro
   const [viewMonth, setViewMonth] = useState(dateParts[1] || 1);
   const [draftHour, setDraftHour] = useState(timeParts[0] || "00");
   const [draftMinute, setDraftMinute] = useState(timeParts[1] || "00");
+  const minYear = Number(min.slice(0, 4)) || 1900;
+  const maxYear = Number(max?.slice(0, 4)) || new Date().getFullYear();
+  const years = useMemo(() => Array.from({ length: maxYear - minYear + 1 }, (_, index) => minYear + index), [maxYear, minYear]);
 
   useEffect(() => {
     if (!open) return;
@@ -34,7 +40,10 @@ export function DateTimeField({ label, type, value, onChange }: DateTimeFieldPro
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
     function handleKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        window.requestAnimationFrame(() => triggerRef.current?.focus());
+      }
     }
     document.addEventListener("pointerdown", handleOutside);
     document.addEventListener("keydown", handleKey);
@@ -43,6 +52,14 @@ export function DateTimeField({ label, type, value, onChange }: DateTimeFieldPro
       document.removeEventListener("keydown", handleKey);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    window.requestAnimationFrame(() => {
+      const preferred = rootRef.current?.querySelector<HTMLElement>(type === "date" ? ".calendar-days button.selected:not(:disabled), .calendar-days button:not(:disabled)" : ".time-selectors select");
+      preferred?.focus();
+    });
+  }, [open, type]);
 
   function toggle() {
     if (!open) {
@@ -63,32 +80,49 @@ export function DateTimeField({ label, type, value, onChange }: DateTimeFieldPro
 
   function moveMonth(offset: number) {
     const next = new Date(viewYear, viewMonth - 1 + offset, 1);
-    setViewYear(next.getFullYear());
-    setViewMonth(next.getMonth() + 1);
+    const nextYear = Math.min(maxYear, Math.max(minYear, next.getFullYear()));
+    const nextMonth = nextYear !== next.getFullYear() ? (nextYear === minYear ? 1 : 12) : next.getMonth() + 1;
+    setViewYear(nextYear);
+    setViewMonth(nextMonth);
   }
 
   function selectDay(day: number) {
-    onChange(`${viewYear}-${pad(viewMonth)}-${pad(day)}`);
+    const nextValue = `${viewYear}-${pad(viewMonth)}-${pad(day)}`;
+    if (nextValue < min || (max && nextValue > max)) return;
+    onChange(nextValue);
     setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
   }
 
   function confirmTime() {
     onChange(`${draftHour}:${draftMinute}`);
     setOpen(false);
+    window.requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
+  function handleDayKey(event: React.KeyboardEvent<HTMLButtonElement>, day: number) {
+    const moves: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 };
+    if (!(event.key in moves)) return;
+    event.preventDefault();
+    const nextDay = day + moves[event.key];
+    const target = rootRef.current?.querySelector<HTMLButtonElement>(`button[data-day="${nextDay}"]:not(:disabled)`);
+    target?.focus();
   }
 
   return (
     <div className={`picker-field picker-${type}`} ref={rootRef}>
-      <span className="picker-label">{label}</span>
+      <span className="picker-label" id={labelId}>{label}</span>
       <button
+        ref={triggerRef}
         type="button"
         className="picker-trigger"
-        aria-label={`${label}：${displayValue}`}
+        aria-labelledby={labelId}
+        aria-description={displayValue ? `当前值：${displayValue}` : "尚未选择"}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={toggle}
       >
-        <b>{displayValue}</b>
+        <b className={displayValue ? "" : "placeholder"}>{displayValue || (type === "date" ? "请选择日期" : "请选择时间")}</b>
         <i className={`picker-icon ${type}`} aria-hidden="true" />
       </button>
 
@@ -98,7 +132,7 @@ export function DateTimeField({ label, type, value, onChange }: DateTimeFieldPro
             <button type="button" aria-label="上个月" onClick={() => moveMonth(-1)}>‹</button>
             <div>
               <select aria-label="年份" value={viewYear} onChange={(event) => setViewYear(Number(event.target.value))}>
-                {YEARS.map((year) => <option key={year} value={year}>{year} 年</option>)}
+                {years.map((year) => <option key={year} value={year}>{year} 年</option>)}
               </select>
               <select aria-label="月份" value={viewMonth} onChange={(event) => setViewMonth(Number(event.target.value))}>
                 {Array.from({ length: 12 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1} 月</option>)}
@@ -112,7 +146,9 @@ export function DateTimeField({ label, type, value, onChange }: DateTimeFieldPro
             {Array.from({ length: daysInMonth }, (_, index) => {
               const day = index + 1;
               const selected = dateParts[0] === viewYear && dateParts[1] === viewMonth && dateParts[2] === day;
-              return <button type="button" className={selected ? "selected" : ""} aria-pressed={selected} key={day} onClick={() => selectDay(day)}>{day}</button>;
+              const dateValue = `${viewYear}-${pad(viewMonth)}-${pad(day)}`;
+              const disabled = dateValue < min || Boolean(max && dateValue > max);
+              return <button type="button" data-day={day} disabled={disabled} className={selected ? "selected" : ""} aria-pressed={selected} key={day} onKeyDown={(event) => handleDayKey(event, day)} onClick={() => selectDay(day)}>{day}</button>;
             })}
           </div>
         </div>

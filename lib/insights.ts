@@ -47,10 +47,18 @@ export interface ChartInsight {
   label: string;
   title: string;
   summary: string;
+  plain: string;
+  manifestations: string[];
   evidence: string[];
   alternative: string;
   limits: string;
   tone: "jade" | "gold" | "vermilion" | "neutral";
+}
+
+export interface QuickReadingItem {
+  label: string;
+  title: string;
+  detail: string;
 }
 
 export interface ChartReading {
@@ -58,6 +66,7 @@ export interface ChartReading {
   summary: string;
   included: string[];
   missing: string[];
+  quickRead: QuickReadingItem[];
   insights: ChartInsight[];
 }
 
@@ -210,11 +219,51 @@ export function buildChartReading(chart: FateChart): ChartReading {
       ? "先从命宫与身宫的双重主轴阅读"
       : "先从日主与命宫两条主轴阅读";
 
+  const strengthPlain = chart.bazi.strength.verdict === "身强"
+    ? "盘面中支持日主的力量相对充足。现实里更值得观察的是：你会怎样把已有能量用于输出、承担和兑现，以及是否容易同时接住太多事情。"
+    : chart.bazi.strength.verdict === "身弱"
+      ? "盘面中支持日主的力量相对有限。面对持续压力时，可以重点观察资源、协作与节奏缓冲是否会明显影响你的发挥，而不是把它理解成能力不足。"
+      : "盘面中的支持与消耗暂未明显偏向一侧。比起寻找单一的“补什么”，更适合观察不同情境下，哪一种力量正在增加。";
+  const strengthManifestations = chart.bazi.strength.verdict === "身强"
+    ? ["资源充足时，可能更愿意主动接住任务，也要留意是否承担过量。", "真正需要核对的是输出、责任与休息能否保持平衡。"]
+    : chart.bazi.strength.verdict === "身弱"
+      ? ["连续独自承担、缺少反馈或支持时，消耗感可能更明显。", "有清晰协作、稳定资源或充分准备时，状态可能更容易展开。"]
+      : ["不同环境下的表现可能差异较大，单一标签很难概括。", "可以留意支持增加与压力增加时，你的行动方式如何变化。"];
+  const relationPlain = relations.combined.length && relations.clashed.length
+    ? "盘内同时出现连接与变化信号。现实中可重点观察：一件事是否一边带来合作或靠近，一边又要求你调整原有节奏。"
+    : relations.clashed.length || relations.punished.length || relations.selfXing
+      ? "盘内的变化或磨合信号更醒目。它不等于事情一定不好，而是提醒你留意哪些关系、计划或习惯会反复要求调整。"
+      : relations.combined.length
+        ? "盘内的连接信号较醒目。它可能表现为合作、靠近或资源汇合，也可能形成牵绊，仍要看现实中是否保有清晰边界。"
+        : "日支与其余三支未见直接的合冲刑害破，表示这一层没有特别集中的结构信号，不代表现实关系一定平静或没有变化。";
+  const relationManifestations = relations.combined.length && relations.clashed.length
+    ? ["靠近一个人或机会的同时，也可能需要改变原来的安排。", "同一件事里既有吸引，也有拉扯；适合分别记录两种感受。"]
+    : relations.clashed.length || relations.punished.length || relations.selfXing
+      ? ["计划被打断、节奏重排或同一矛盾反复出现时，这条线索更值得核对。", "变化也可能带来重新选择与建立边界的机会，不只代表损失。"]
+      : relations.combined.length
+        ? ["合作、关系靠近或资源汇合时，可能更容易感到这股力量。", "若连接逐渐变成迁就或纠缠，需要回到现实边界重新判断。"]
+        : ["没有集中信号时，不必勉强寻找对应事件。", "现实经历若更强烈，应优先保留现实反例，再检查其他盘面层次。"];
+  const lifeBodyPlain = bodyPalace.name === lifePalace.name
+    ? "命宫与身宫落在同一位置，传统上会把内在关注与实际投入视为较集中；具体如何表现，仍要结合主星与相关宫位。"
+    : "命宫与身宫落在不同位置，传统上会把“最初如何理解自己”和“后来把力气投向哪里”分开观察。两者不是矛盾，而是两种视角。";
+  const lifeBodyManifestations = bodyPalace.name === lifePalace.name
+    ? ["想法与行动方向可能更容易围绕同一类主题集中。", "集中不等于单一，仍要看不同场景是否出现明显反例。"]
+    : ["心里最在意的事，未必就是现实中投入最多的事。", "当两种方向拉开时，可以观察自己是在适应环境，还是主动调整重心。"];
+  const visiblePlain = "表层五行分布只是盘面的出现频率，不等同于能力、性格或吉凶。它更适合帮助你决定下一步查看哪些关系，而不是直接得出“缺什么”的结论。";
+  const mutagenPlain = transformed.length
+    ? "四化可以理解为星曜作用方向的四种标记，用来追踪哪些生活主题更容易得到资源、承担责任、形成表达或出现牵挂；它们不是四个简单的好坏等级。"
+    : "当前数据没有返回可用的四化标记，因此这一层暂不延伸解释，也不从缺失字段推断吉凶。";
+
   return {
     headline,
     summary: `此导读只合已算之盘面为序，助君按次第观盘；古法之构，不作性格与祸福之断。`,
     included: ["四柱与藏干", "表层五行", "月令旺衰与身强身弱", "合化与刑害破（含三刑全象）", "本命十二宫", "命身主与四化字段", "大限宫与流年宫", "宫干飞化落宫"],
     missing: ["化气后的旺衰重估", "大限流年四化叠盘", "大运与流月", "完整三方四正会照权重", "现实经历"],
+    quickRead: [
+      { label: "核心锚点", title: `日主${chart.bazi.strength.verdict}`, detail: strengthPlain },
+      { label: "结构张力", title: relations.combined.length && relations.clashed.length ? "连接与变化同时出现" : relationNotes.length ? "盘内关系需要核对" : "未见集中关系信号", detail: relationPlain },
+      { label: "行动落点", title: bodyPalace.name === lifePalace.name ? "命身主轴相合" : "命身两处参看", detail: lifeBodyPlain },
+    ],
     insights: [
       {
         id: "day-master",
@@ -222,6 +271,8 @@ export function buildChartReading(chart: FateChart): ChartReading {
         label: "八字主轴",
         title: `日主${chart.bazi.strength.verdict}，以${chart.bazi.dayMaster}为观察锚点`,
         summary: `月令为本、藏干为根：${chart.bazi.strength.commandNote}，表层近似判定为${chart.bazi.strength.verdict}。身强者喜克泄耗，身弱者喜生扶，此后生克信号才有喜忌方向。`,
+        plain: strengthPlain,
+        manifestations: strengthManifestations,
         evidence: [
           `日柱：${relations.dayPillar.gan}${relations.dayPillar.zhi}`,
           `日干十神：${relations.dayPillar.shiShenGan}`,
@@ -239,6 +290,8 @@ export function buildChartReading(chart: FateChart): ChartReading {
         label: "地支关系",
         title: relationNotes.length ? "盘内存在可继续追踪的合冲刑破关系" : "盘内未见日支直接合冲刑害破",
         summary: relationSummary,
+        plain: relationPlain,
+        manifestations: relationManifestations,
         evidence: [
           `四支：${chart.bazi.pillars.map((pillar) => `${pillar.label}${pillar.zhi}`).join(" · ")}`,
           `六合：${relations.heTransforms.length ? relations.heTransforms.map((item) => `${relations.dayPillar.zhi}${item.pillar.zhi}${item.transformed ? `化${item.element}` : "（绊）"}`).join("、") : "未见"}`,
@@ -262,6 +315,8 @@ export function buildChartReading(chart: FateChart): ChartReading {
         label: "紫微主轴",
         title: bodyPalace.name === lifePalace.name ? `命身同落${lifePalace.name}` : `${lifePalace.name}与${bodyPalace.name}构成双重观察点`,
         summary: `命宫落${lifePalace.ganZhi}，主星${lifeMajor.join("、") || "为空宫"}；身宫落在${bodyPalace.ganZhi}${bodyPalace.name}，主星${bodyMajor.join("、") || "为空宫"}。`,
+        plain: lifeBodyPlain,
+        manifestations: lifeBodyManifestations,
         evidence: [
           `命宫：${lifePalace.ganZhi} · ${lifeMajor.join("、") || "空宫"}`,
           `身宫：${bodyPalace.ganZhi} · ${bodyPalace.name} · ${bodyMajor.join("、") || "空宫"}`,
@@ -277,6 +332,8 @@ export function buildChartReading(chart: FateChart): ChartReading {
         label: "已见与未决",
         title: `${strongest[0]}在表层计数较多，${weakest[0]}较少`,
         summary: `八个表层干支中，${strongest[0]}出现 ${strongest[1]} 次，${weakest[0]}出现 ${weakest[1]} 次。这个计数用于描述分布，不直接判断强弱或喜忌。`,
+        plain: visiblePlain,
+        manifestations: ["某个元素出现较多，只表示它在表层坐标中更常见。", "若现实感受与计数不一致，应优先保留现实反例，再检查月令、藏干与合化。"],
         evidence: [
           `五行表层计数：${elements.map(([element, count]) => `${element}${count}`).join(" · ")}`,
           `采用时间：${chart.correctedDateTime}`,
@@ -291,6 +348,8 @@ export function buildChartReading(chart: FateChart): ChartReading {
         label: "紫微四化",
         title: transformed.length ? `本命盘记录到 ${transformed.length} 处四化标记` : "当前返回盘面未见四化标记",
         summary: transformed.length ? `四化分布在${transformed.map((item) => item.split(" · ")[0]).join("、")}等宫位，可作为后续追踪宫位联动的入口。` : "四化需要结合天干、星曜落宫与宫位关系理解，不以数量多少判定吉凶。",
+        plain: mutagenPlain,
+        manifestations: ["先看四化落在哪个生活主题，再观察现实中是否反复出现。", "化禄、化权、化科、化忌都可能同时带来机会与负担，不宜直接排成吉凶顺序。"],
         evidence: transformed.length ? transformed : ["当前标准化数据未返回四化字段"],
         alternative: "化禄、化权、化科、化忌不是简单的好坏标签，同一四化在不同宫位与会照结构中会有不同讨论重点。",
         limits: "当前只展示本命四化字段，尚未展开飞化路径、自化与大限流年四化。",

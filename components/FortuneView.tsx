@@ -15,7 +15,11 @@ function ScoreStrip({ scores }: { scores: { support: number; pressure: number; m
   );
 }
 
-export function FortuneView({ chart }: { chart: FateChart }) {
+export function FortuneView({ chart, savedSourceIds = [], onSaveObservation }: {
+  chart: FateChart;
+  savedSourceIds?: string[];
+  onSaveObservation?: (sourceId: string, title: string, question: string, observedOn: string) => void;
+}) {
   const report = buildFortuneReport(chart);
   const currentMeta = FORTUNE_STATE_META[report.current.state];
 
@@ -60,6 +64,8 @@ export function FortuneView({ chart }: { chart: FateChart }) {
         <div className="fortune-year-grid">
           {report.years.map((item) => {
             const meta = FORTUNE_STATE_META[item.state];
+            const sourceId = `fortune-${item.year}`;
+            const saved = savedSourceIds.includes(sourceId);
             return (
               <article className={`fortune-year-card state-${item.state}`} key={item.year}>
                 <header><span>{item.year}</span><b>{item.ganZhi}</b><i>{meta.seal}</i></header>
@@ -73,6 +79,7 @@ export function FortuneView({ chart }: { chart: FateChart }) {
                     <section className="fortune-observation"><b>现实观测</b><p>{item.observation}</p></section>
                   </div>
                 </details>
+                {onSaveObservation && <button className={saved ? "fortune-save saved" : "fortune-save"} disabled={saved} onClick={() => onSaveObservation(sourceId, `${item.year} ${item.ganZhi} · ${meta.label}`, item.observation, `${item.year}-01-01`)}>{saved ? "已加入观测簿" : "留下这一年"}</button>}
               </article>
             );
           })}
