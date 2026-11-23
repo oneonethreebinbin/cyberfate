@@ -37,11 +37,33 @@ export function questionForInsight(insightId: string) {
   return INSIGHT_QUESTIONS[insightId] ?? "这条观察在现实中有什么对应或反例？";
 }
 
+const OBSERVATION_SOURCES: ObservationSource[] = ["insight", "time", "relationship", "manual"];
+
+/** 逐条校验本地存储中的观测记录；localStorage 可能被手工编辑或被旧版本写入。 */
+export function isObservationRecord(value: unknown): value is ObservationRecord {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<ObservationRecord>;
+  return (
+    typeof item.id === "string" &&
+    item.id.length > 0 &&
+    typeof item.profileId === "string" &&
+    typeof item.profileName === "string" &&
+    typeof item.source === "string" && OBSERVATION_SOURCES.includes(item.source as ObservationSource) &&
+    typeof item.sourceId === "string" &&
+    typeof item.title === "string" &&
+    typeof item.question === "string" &&
+    typeof item.status === "string" && item.status in OBSERVATION_STATUS_META &&
+    typeof item.note === "string" &&
+    typeof item.observedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.observedOn) &&
+    typeof item.createdAt === "string"
+  );
+}
+
 export function readObservationRecords(): ObservationRecord[] {
   if (typeof window === "undefined") return [];
   try {
     const value = JSON.parse(localStorage.getItem("cyberfate-observations") ?? "[]");
-    return Array.isArray(value) ? value : [];
+    return Array.isArray(value) ? value.filter(isObservationRecord) : [];
   } catch {
     return [];
   }

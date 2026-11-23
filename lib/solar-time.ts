@@ -23,9 +23,13 @@ const DST_PERIODS: Array<[number, number, number, number, number, number]> = [
   [1991, 4, 14, 1991, 9, 15],
 ];
 
+// 1986–1991 年中国实行夏令时；起始日 02:00 起拨快一小时，结束日 02:00 拨回。
+// 因此结束日 00:00–01:59 仍属夏令时，出生时间需还原到前一日 23:xx 或当日 00:xx。
 function dstAdjustmentMinutes(date: Date): number {
   for (const [sy, sm, sd, ey, em, ed] of DST_PERIODS) {
-    if (date >= new Date(sy, sm - 1, sd) && date < new Date(ey, em - 1, ed)) return -60;
+    const start = new Date(sy, sm - 1, sd, 2);
+    const end = new Date(ey, em - 1, ed, 2);
+    if (date >= start && date < end) return -60;
   }
   return 0;
 }
@@ -60,5 +64,5 @@ function hourBranchIndex(hour: number) {
 
 export function getTimeBranch(time: string) {
   const hour = Number(time.split(":")[0]);
-  return Number.isFinite(hour) ? EARTHLY_BRANCHES[hourBranchIndex(hour)] : "";
+  return time !== "" && Number.isFinite(hour) ? EARTHLY_BRANCHES[hourBranchIndex(hour)] : "";
 }

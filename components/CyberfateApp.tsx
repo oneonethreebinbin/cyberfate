@@ -10,6 +10,7 @@ import { CITY_OPTIONS, cityIdForLongitude } from "@/lib/locations";
 import { GLOSSARY, type GlossaryScope } from "@/lib/glossary";
 import {
   createObservationRecord,
+  isObservationRecord,
   questionForInsight,
   readObservationRecords,
   writeObservationRecords,
@@ -728,12 +729,6 @@ function isBirthProfile(value: unknown): value is BirthProfile {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<BirthProfile>;
   return typeof item.id === "string" && typeof item.name === "string" && isValidBirthDate(item.date ?? "") && isValidTime(item.time ?? "") && (item.gender === "男" || item.gender === "女") && typeof item.longitude === "number" && item.longitude >= 73 && item.longitude <= 135 && typeof item.useTrueSolarTime === "boolean";
-}
-
-function isObservationRecord(value: unknown): value is ObservationRecord {
-  if (!value || typeof value !== "object") return false;
-  const item = value as Partial<ObservationRecord>;
-  return typeof item.id === "string" && typeof item.profileId === "string" && typeof item.title === "string" && typeof item.question === "string" && typeof item.observedOn === "string";
 }
 
 function downloadJson(filename: string, value: unknown) {
