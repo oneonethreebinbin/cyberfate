@@ -1,5 +1,7 @@
 import { FORTUNE_STATE_META, buildFortuneReport, type FortuneState } from "@/lib/fortune";
 import { analyzeDaily, DAILY_STATE_META } from "@/lib/daily";
+import { buildFortuneCalendar } from "@/lib/calendar-export";
+import { trackLocalEvent } from "@/lib/product";
 import type { FateChart } from "@/lib/types";
 import { TerminologyPanel } from "@/components/TerminologyPanel";
 
@@ -28,6 +30,24 @@ export function FortuneView({ chart, savedSourceIds = [], onSaveObservation }: {
   const dailySourceId = `daily-${daily.date}`;
   const dailySaved = savedSourceIds.includes(dailySourceId);
 
+  function exportCalendar() {
+    try {
+      const calendar = buildFortuneCalendar(chart);
+      const blob = new Blob([calendar], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `cyberfate-fortune-${chart.profile.name || chart.profile.date}.ics`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+      trackLocalEvent("fortune_calendar_exported");
+    } catch {
+      trackLocalEvent("fortune_calendar_export_failed");
+    }
+  }
+
   return (
     <div className="view-stack fortune-view">
       <section className="page-intro fortune-intro">
@@ -37,6 +57,10 @@ export function FortuneView({ chart, savedSourceIds = [], onSaveObservation }: {
           <small>日支</small><b>{report.dayBranch}</b><i />
           <small>旺衰</small><b>{report.strength.verdict}</b>
           {report.currentDaYun && <><i /><small>现行大运</small><b>{report.currentDaYun.ganZhi}</b></>}
+        </div>
+        <div className="fortune-calendar-export">
+          <button onClick={exportCalendar} title="导出未来六个流年、十二个流月与六十个流日的全天事件">导出运势日历 <small>日 · 月 · 年 三层取象</small></button>
+          <p>生成 .ics 文件，可导入手机或电脑日历逐日查看；不含生辰与姓名。</p>
         </div>
       </section>
 
