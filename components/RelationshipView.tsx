@@ -7,8 +7,14 @@ import type { BirthProfile, FateChart, Gender } from "@/lib/types";
 import { DateTimeField } from "@/components/DateTimeField";
 import { TerminologyPanel } from "@/components/TerminologyPanel";
 import { CITY_OPTIONS } from "@/lib/locations";
-import { downloadShareCard, renderCompatibilityShareCard } from "@/lib/share-card";
+import { buildAnonymizedCompatibilitySummary, downloadShareCard, renderCompatibilityShareCard } from "@/lib/share-card";
 import { trackLocalEvent } from "@/lib/product";
+import {
+  readRelationshipTimelineNotes,
+  writeRelationshipTimelineNotes,
+  type RelationshipTimelineNote,
+  type RelationshipTimelineStatus,
+} from "@/lib/relationship-notes";
 
 type RelationshipMode = "single" | "compatibility";
 
@@ -28,9 +34,6 @@ const TONE_LABELS = {
   neutral: "基础线索",
 };
 
-type TimelineNoteStatus = "有对应经历" | "暂无对应经历" | "仍不确定";
-type TimelineNote = { status?: TimelineNoteStatus; text?: string };
-
 function today() {
   const date = new Date();
   const offset = date.getTimezoneOffset() * 60_000;
@@ -38,22 +41,20 @@ function today() {
 }
 
 function RelationshipTimeline({ chart, timeline }: { chart: FateChart; timeline: ReturnType<typeof analyzeSingleRelationship>["timeline"] }) {
-  const storageKey = `cyberfate-relationship-notes:${chart.profile.id}`;
-  const [notes, setNotes] = useState<Record<number, TimelineNote>>({});
+  const [notes, setNotes] = useState<Record<number, RelationshipTimelineNote>>({});
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(storageKey);
-      setNotes(stored ? JSON.parse(stored) as Record<number, TimelineNote> : {});
+      setNotes(readRelationshipTimelineNotes(chart.profile.id));
     } catch {
       setNotes({});
     }
-  }, [storageKey]);
+  }, [chart.profile.id]);
 
-  function updateNote(year: number, change: Partial<TimelineNote>) {
+  function updateNote(year: number, change: Partial<RelationshipTimelineNote>) {
     setNotes((current) => {
       const next = { ...current, [year]: { ...current[year], ...change } };
-      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* 本地存储不可用时仍保留当前会话状态 */ }
+      writeRelationshipTimelineNotes(chart.profile.id, next);
       return next;
     });
   }
@@ -62,7 +63,7 @@ function RelationshipTimeline({ chart, timeline }: { chart: FateChart; timeline:
     setNotes((current) => {
       const next = { ...current };
       delete next[year];
-      try { localStorage.setItem(storageKey, JSON.stringify(next)); } catch { /* 本地存储不可用时仍清除当前会话状态 */ }
+      writeRelationshipTimelineNotes(chart.profile.id, next);
       return next;
     });
   }
@@ -82,7 +83,7 @@ function RelationshipTimeline({ chart, timeline }: { chart: FateChart; timeline:
               <summary><span>记录现实情况</span><small>{note.status ?? "未记录"}</small><i aria-hidden="true" /></summary>
               <div className="year-note-body">
                 <div className="note-status" role="group" aria-label={`${item.year} 年现实情况`}>
-                  {(["有对应经历", "暂无对应经历", "仍不确定"] as TimelineNoteStatus[]).map((status) => (
+                  {(["有对应经历", "暂无对应经历", "仍不确定"] as RelationshipTimelineStatus[]).map((status) => (
                     <button type="button" aria-pressed={note.status === status} className={note.status === status ? "active" : ""} onClick={() => updateNote(item.year, { status })} key={status}>{status}</button>
                   ))}
                 </div>
@@ -178,21 +179,14 @@ function CompatibilityResult({ report, aName, bName, approximate }: { report: Co
   const [cardBusy, setCardBusy] = useState(false);
   const [cardNotice, setCardNotice] = useState("");
   const dimensions = approximate ? report.dimensions.slice(0, 3) : report.dimensions;
+  const shareText = useMemo(() => buildAnonymizedCompatibilitySummary(report, approximate), [report, approximate]);
 
   async function copySummary() {
-    const text = [
-      "CYBERFATE · 脱敏关系摘要",
-      `${aName || "A"} × ${bName || "B"}：${report.relationLabel}`,
-      report.headline,
-      ...dimensions.map((dimension) => `${dimension.name}｜${dimension.status}：${dimension.detail}`),
-      approximate ? "对方时辰未知：仅保留日柱层面的有限比较。" : "",
-      "传统规则推演，仅供共同讨论，不作为关系决策依据。",
-    ].filter(Boolean).join("\n");
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(shareText);
     } catch {
       const textarea = document.createElement("textarea");
-      textarea.value = text;
+      textarea.value = shareText;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand("copy");
@@ -206,12 +200,12 @@ function CompatibilityResult({ report, aName, bName, approximate }: { report: Co
     setCardBusy(true);
     setCardNotice("");
     try {
-      const blob = await renderCompatibilityShareCard({ report, aName, bName, approximate });
-      downloadShareCard(blob, `cyberfate-合盘-${(aName || "A")}×${(bName || "B")}.png`);
+      const blob = await renderCompatibilityShareCard({ report, aName: "A", bName: "B", approximate });
+      downloadShareCard(blob, "cyberfate-关系摘要-A×B.png");
       trackLocalEvent("share_card_saved");
-      setCardNotice("分享卡片已保存到下载目录");
+      setCardNotice("A/B 分享卡已保存到下载目录");
     } catch {
-      setCardNotice("分享卡片生成失败，可改用复制脱敏摘要");
+      setCardNotice("分享卡生成失败，可以改用复制 A/B 摘要");
     } finally {
       setCardBusy(false);
     }
@@ -224,10 +218,17 @@ function CompatibilityResult({ report, aName, bName, approximate }: { report: Co
         <div className="name-pair"><h2>{aName || "A"}</h2><i><small>关系结构</small><b>{report.relationLabel}</b></i><h2>{bName || "B"}</h2></div>
         <p>{report.headline}</p>
         {approximate && <div className="compatibility-limited"><b>有限比较</b><span>对方时辰未知，仅保留双方日柱的吸引、沟通和冲突结构；紫微、配偶星强弱与时间协调不展示。</span></div>}
-        <div className="share-summary-actions">
-          <button className="share-summary-button" onClick={copySummary}>{copied ? "摘要已复制" : "复制脱敏摘要"}</button>
-          <button className="share-summary-button secondary" disabled={cardBusy} onClick={downloadCard}>{cardBusy ? "正在生成" : "保存分享卡片"}</button>
-        </div>
+        <details className="share-preview">
+          <summary>预览并选择分享方式</summary>
+          <div>
+            <p>默认以 A / B 代称，不包含姓名、出生日期、时间、城市或经度。发送前请确认对方知情，并检查内容是否适合公开。</p>
+            <pre>{shareText}</pre>
+            <div className="share-summary-actions">
+              <button className="share-summary-button" onClick={copySummary}>{copied ? "A/B 摘要已复制" : "复制 A/B 摘要"}</button>
+              <button className="share-summary-button secondary" disabled={cardBusy} onClick={downloadCard}>{cardBusy ? "正在生成" : "保存 A/B 分享卡"}</button>
+            </div>
+          </div>
+        </details>
         {cardNotice && <p className="share-card-notice" role="status">{cardNotice}</p>}
       </section>
       <section className="dimension-list">
@@ -264,10 +265,23 @@ function CompatibilityView({ chart }: { chart: FateChart }) {
   const [partnerCity, setPartnerCity] = useState("");
   const [partnerGenderSelected, setPartnerGenderSelected] = useState(false);
   const [result, setResult] = useState<CompatibilityReport | null>(null);
+  const [resultInvalidated, setResultInvalidated] = useState(false);
   const [error, setError] = useState("");
   const partnerReady = /^\d{4}-\d{2}-\d{2}$/.test(partner.date) && (partner.timeKnown === false || /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(partner.time)) && partnerGenderSelected && Boolean(partnerCity);
 
+  useEffect(() => {
+    setResult(null);
+    setResultInvalidated(false);
+  }, [chart.profile.id]);
+
+  function invalidateResult() {
+    if (result) setResultInvalidated(true);
+    setResult(null);
+    setError("");
+  }
+
   function update<K extends keyof BirthProfile>(key: K, value: BirthProfile[K]) {
+    invalidateResult();
     setPartner((current) => ({ ...current, [key]: value }));
   }
 
@@ -284,6 +298,7 @@ function CompatibilityView({ chart }: { chart: FateChart }) {
       }
       const partnerChart = createFateChart({ ...partner, time: partner.timeKnown === false ? "12:00" : partner.time, id: crypto.randomUUID(), createdAt: new Date().toISOString() });
       setResult(analyzeCompatibility(chart, partnerChart));
+      setResultInvalidated(false);
       setError("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "合盘失败，请检查出生资料");
@@ -299,7 +314,7 @@ function CompatibilityView({ chart }: { chart: FateChart }) {
           <div className="partner-pair"><DateTimeField label="公历日期" type="date" value={partner.date} max={today()} onChange={(value) => update("date", value)} />{partner.timeKnown !== false ? <DateTimeField label="出生时间" type="time" value={partner.time} onChange={(value) => update("time", value)} /> : <div className="partner-unknown-time"><span>出生时间</span><b>暂不知道</b><small>只比较日柱层面</small></div>}</div>
           <fieldset className="partner-time-certainty"><legend>对方时辰</legend><div className="partner-gender"><button type="button" aria-pressed={partner.timeKnown !== false} className={partner.timeKnown !== false ? "active" : ""} onClick={() => { update("timeKnown", true); update("time", ""); }}>知道</button><button type="button" aria-pressed={partner.timeKnown === false} className={partner.timeKnown === false ? "active" : ""} onClick={() => { update("timeKnown", false); update("time", "12:00"); }}>不知道</button></div></fieldset>
           <fieldset><legend>传统排盘口径</legend><div className="partner-gender">{(["男", "女"] as Gender[]).map((gender) => <button type="button" aria-pressed={partnerGenderSelected && partner.gender === gender} className={partnerGenderSelected && partner.gender === gender ? "active" : ""} key={gender} onClick={() => { update("gender", gender); setPartnerGenderSelected(true); }}>{gender}命</button>)}</div></fieldset>
-          <label><span>出生城市</span><select value={partnerCity} onChange={(event) => { const id = event.target.value; setPartnerCity(id); const city = CITY_OPTIONS.find((item) => item.id === id); if (city) update("longitude", city.longitude); }}><option value="" disabled>请选择城市</option>{CITY_OPTIONS.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}<option value="custom">其他 / 手动经度</option></select></label>
+          <label><span>出生城市</span><select value={partnerCity} onChange={(event) => { const id = event.target.value; invalidateResult(); setPartnerCity(id); const city = CITY_OPTIONS.find((item) => item.id === id); if (city) setPartner((current) => ({ ...current, longitude: city.longitude })); }}><option value="" disabled>请选择城市</option>{CITY_OPTIONS.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}<option value="custom">其他 / 手动经度</option></select></label>
           <p className="partner-timezone-note">当前仅支持按中国标准时间（UTC+8）记录的出生时间。</p>
           {partnerCity === "custom" && <label><span>出生地经度（东经）</span><input type="number" min="73" max="135" step="0.1" value={partner.longitude} onChange={(event) => update("longitude", Number(event.target.value))} /></label>}
           <label className="partner-toggle"><input type="checkbox" checked={partner.useTrueSolarTime} onChange={(event) => update("useTrueSolarTime", event.target.checked)} /><span>使用真太阳时校正</span></label>
@@ -308,7 +323,7 @@ function CompatibilityView({ chart }: { chart: FateChart }) {
         </div>
       </section>
       <div className="compatibility-stage">
-        {result ? <CompatibilityResult report={result} aName={chart.profile.name} bName={partner.name} approximate={partner.timeKnown === false} /> : <div className="compatibility-empty"><div className="empty-rings"><i /><i /><b>合</b></div><span>双人合盘</span><h2>两盘对坐，共观一缘</h2><p>较双方之日柱、夫妻宫、五行与五年共同触发之窗；不知道对方时辰也可先做有限比较。</p></div>}
+        {result ? <CompatibilityResult report={result} aName={chart.profile.name} bName={partner.name} approximate={partner.timeKnown === false} /> : <div className="compatibility-empty"><div className="empty-rings"><i /><i /><b>合</b></div><span>{resultInvalidated ? "结果待更新" : "双人合盘"}</span><h2>{resultInvalidated ? "对方资料已修改" : "两盘对坐，共观一缘"}</h2><p>{resultInvalidated ? "上一次合盘已隐藏。请按当前资料重新生成后，再查看或分享关系摘要。" : "较双方之日柱、夫妻宫、五行与五年共同触发之窗；不知道对方时辰也可先做有限比较。"}</p></div>}
       </div>
     </div>
   );
@@ -323,7 +338,7 @@ export function RelationshipView({ chart, savedSourceIds = [], onSaveObservation
   return (
     <div className="view-stack relationship-view">
       <section className="page-intro relationship-intro">
-        <div><span className="eyebrow">关系专题</span><h1>姻缘观测</h1><p>从夫妻宫、配偶星与流年触发处，看一段缘分的气数脉络。</p></div>
+        <div><span className="eyebrow">关系专题</span><h1>关系观测</h1><p>从夫妻宫、配偶星与流年触发处，整理一段关系的结构线索。</p></div>
         <div className="relationship-mode" role="tablist" aria-label="姻缘分析方式">
           <button id="relationship-tab-single" aria-controls="relationship-panel" tabIndex={mode === "single" ? 0 : -1} role="tab" aria-selected={mode === "single"} className={mode === "single" ? "active" : ""} onKeyDown={(event) => handleModeKey(event, mode, setMode)} onClick={() => setMode("single")}><b>单人姻缘</b><small>关系模式与时间</small></button>
           <button id="relationship-tab-compatibility" aria-controls="relationship-panel" tabIndex={mode === "compatibility" ? 0 : -1} role="tab" aria-selected={mode === "compatibility"} className={mode === "compatibility" ? "active" : ""} onKeyDown={(event) => handleModeKey(event, mode, setMode)} onClick={() => setMode("compatibility")}><b>双人合盘</b><small>互动结构与差异</small></button>

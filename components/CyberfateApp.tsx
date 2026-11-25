@@ -13,14 +13,25 @@ import {
   questionForInsight,
   readObservationRecords,
   writeObservationRecords,
+  type ObservationDraft,
   type ObservationRecord,
   type ObservationSource,
 } from "@/lib/observations";
 import { ALGORITHM_VERSION, trackLocalEvent } from "@/lib/product";
-import { downloadJson, isBirthProfile, isValidBirthDate, isValidTime, localDateAfter, localDateValue } from "@/lib/birth";
+import { downloadJson, isBirthProfile, isSameBirthProfileInput, isValidBirthDate, isValidTime, localDateAfter, localDateValue } from "@/lib/birth";
+import {
+  normalizeRelationshipNotesBackupEntries,
+  readAllRelationshipTimelineNotes,
+  removeRelationshipTimelineNotes,
+  RELATIONSHIP_NOTES_CHANGED_EVENT,
+  restoreRelationshipTimelineNotes,
+  type RelationshipNotesBackupEntry,
+} from "@/lib/relationship-notes";
+import { clearCyberfateLocalData } from "@/lib/local-data";
 import { installGlobalErrorHandlers } from "@/lib/error-report";
 import { Icon } from "@/components/shared/Icon";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { PrivacyConfirmDialog } from "@/components/shared/PrivacyConfirmDialog";
 import {
   handleTabArrow,
   INITIAL_PROFILE,
@@ -43,6 +54,8 @@ function FeatureLoading() {
 
 const ObservationView = dynamic(() => import("@/components/ObservationView").then((mod) => mod.ObservationView), { loading: FeatureLoading });
 
+type ExportKind = "chart" | "backup";
+
 export function CyberfateApp() {
   const [tab, setTab] = useState<Tab>("overview");
   const [expertMode, setExpertMode] = useState<ExpertMode>("bazi");
@@ -61,7 +74,10 @@ export function CyberfateApp() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [confirmClearAllData, setConfirmClearAllData] = useState(false);
   const [notice, setNotice] = useState("");
+  const [pendingExport, setPendingExport] = useState<ExportKind | null>(null);
+  const [relationshipNotesAvailable, setRelationshipNotesAvailable] = useState(false);
   const noticeTimerRef = useRef<number | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +90,10 @@ export function CyberfateApp() {
       setHistory([]);
     }
     setObservations(readObservationRecords());
+    const syncRelationshipNotes = () => setRelationshipNotesAvailable(readAllRelationshipTimelineNotes().length > 0);
+    syncRelationshipNotes();
+    window.addEventListener(RELATIONSHIP_NOTES_CHANGED_EVENT, syncRelationshipNotes);
+    return () => window.removeEventListener(RELATIONSHIP_NOTES_CHANGED_EVENT, syncRelationshipNotes);
   }, []);
 
   useEffect(() => () => {
@@ -100,7 +120,8 @@ export function CyberfateApp() {
   const timeBranch = useMemo(() => getTimeBranch(profile.time), [profile.time]);
   const preview = useMemo(() => draftHasDateTime ? correctSolarTime({ ...profile, time: profile.timeKnown === false ? "12:00" : profile.time }) : null, [draftHasDateTime, profile]);
   const previewCorrection = preview?.detail;
-  const previewBranch = useMemo(() => preview ? getTimeBranch(`${preview.date.getHours()}:00`) : "", [preview]);
+  const previewBranch = useMemo(() => preview ? getTimeBranch(`${preview.civil.hour}:00`) : "", [preview]);
+  const resultStale = Boolean(chart && !isSameBirthProfileInput(profile, chart.profile));
 
   function updateProfile<K extends keyof BirthProfile>(key: K, value: BirthProfile[K]) {
     setProfile((current) => ({ ...current, [key]: value }));
@@ -193,7 +214,7 @@ export function CyberfateApp() {
       setHistory(records);
       try { localStorage.setItem("cyberfate-history", JSON.stringify(records)); } catch { /* 会话内仍可使用 */ }
       setExploreMode(intent);
-      navigateToTab(next.timeKnown === false ? "overview" : intent === "self" ? "overview" : "explore", intent);
+      navigateToTab("overview");
       setMobileControlsOpen(false);
       setRailCollapsed(true);
       trackLocalEvent("chart_generated", { intent, timeKnown: next.timeKnown !== false });
@@ -231,34 +252,67 @@ export function CyberfateApp() {
     setHistoryOpen(false);
     setPendingDeleteId(null);
     setConfirmClear(false);
+    setConfirmClearAllData(false);
   }
 
-  function removeProfile(id: string) {
-    if (pendingDeleteId !== id) {
-      setPendingDeleteId(id);
-      setConfirmClear(false);
-      return;
-    }
+  function removeProfile(id: string, includeRelated: boolean) {
     const records = history.filter((item) => item.id !== id);
     setHistory(records);
     try { localStorage.setItem("cyberfate-history", JSON.stringify(records)); } catch { /* 会话内仍可删除 */ }
+    if (includeRelated) {
+      updateObservations(observations.filter((item) => item.profileId !== id));
+      removeRelationshipTimelineNotes(id);
+      if (chart?.profile.id === id) {
+        setChart(null);
+        setHasResult(false);
+        setProfile({ ...INITIAL_PROFILE, createdAt: new Date().toISOString() });
+        setCityId("");
+        setGenderSelected(false);
+        setTab("overview");
+      }
+    }
     setPendingDeleteId(null);
-    flashNotice("档案已删除", 2200);
+    setConfirmClear(false);
+    setConfirmClearAllData(false);
+    flashNotice(includeRelated ? "档案、关联观测与关系复盘已删除" : "档案已删除；关联观测与关系复盘已保留", 3200);
   }
 
   function clearHistory() {
     if (!confirmClear) {
       setConfirmClear(true);
+      setConfirmClearAllData(false);
       setPendingDeleteId(null);
       return;
     }
     localStorage.removeItem("cyberfate-history");
     setHistory([]);
     setConfirmClear(false);
-    flashNotice("已清空全部档案", 2200);
+    flashNotice("已清空档案列表；观测与关系复盘仍保留", 3000);
   }
 
-  function exportChart() {
+  function clearAllLocalData() {
+    const removedKeys = clearCyberfateLocalData(localStorage);
+    setHistory([]);
+    setObservations([]);
+    setRelationshipNotesAvailable(false);
+    setChart(null);
+    setHasResult(false);
+    setProfile({ ...INITIAL_PROFILE, createdAt: new Date().toISOString() });
+    setCityId("");
+    setGenderSelected(false);
+    setTab("overview");
+    setExploreMode("self");
+    setIntent("self");
+    setHistoryOpen(false);
+    setPendingDeleteId(null);
+    setConfirmClear(false);
+    setConfirmClearAllData(false);
+    setRailCollapsed(false);
+    setMobileControlsOpen(false);
+    flashNotice(removedKeys.length ? "已清除 Cyberfate 在此浏览器保存的全部本地数据" : "当前浏览器没有可清除的 Cyberfate 本地数据", 3600);
+  }
+
+  function downloadChart() {
     if (!hasResult || !chart) return;
     downloadJson(`cyberfate-${chart.profile.name || chart.profile.date}.json`, {
       format: "cyberfate-chart",
@@ -268,19 +322,22 @@ export function CyberfateApp() {
       chart,
       observations: observations.filter((record) => record.profileId === chart.profile.id),
     });
-    flashNotice("已导出当前命盘 JSON，请妥善保存", 2800);
+    setPendingExport(null);
+    flashNotice("当前命盘已下载，请妥善保管含有生辰资料的文件", 3200);
   }
 
-  function exportBackup() {
+  function downloadBackup() {
     downloadJson(`cyberfate-backup-${localDateValue()}.json`, {
       format: "cyberfate-backup",
-      version: 1,
+      version: 2,
       algorithmVersion: ALGORITHM_VERSION,
       exportedAt: new Date().toISOString(),
       profiles: history,
       observations,
+      relationshipNotes: readAllRelationshipTimelineNotes(),
     });
-    flashNotice("已导出全部档案与观测记录", 2600);
+    setPendingExport(null);
+    flashNotice("完整备份已下载；文件未加密，请存放在可信位置", 3200);
   }
 
   async function importBackup(event: React.ChangeEvent<HTMLInputElement>) {
@@ -289,19 +346,21 @@ export function CyberfateApp() {
     if (!file) return;
     try {
       if (file.size > 5 * 1024 * 1024) throw new Error("备份文件超过 5MB，请检查是否选择了正确文件");
-      const value = JSON.parse(await file.text()) as { format?: string; version?: number; profiles?: unknown[]; observations?: unknown[] };
-      if (value.format !== "cyberfate-backup" || value.version !== 1 || !Array.isArray(value.profiles) || !Array.isArray(value.observations)) {
+      const value = JSON.parse(await file.text()) as { format?: string; version?: number; profiles?: unknown[]; observations?: unknown[]; relationshipNotes?: unknown[] };
+      if (value.format !== "cyberfate-backup" || (value.version !== 1 && value.version !== 2) || !Array.isArray(value.profiles) || !Array.isArray(value.observations) || (value.version === 2 && !Array.isArray(value.relationshipNotes))) {
         throw new Error("请选择由本应用导出的完整备份文件");
       }
       const importedProfiles = value.profiles.filter(isBirthProfile);
       const importedObservations = value.observations.filter(isObservationRecord);
-      if (!importedProfiles.length && !importedObservations.length) throw new Error("备份中没有可恢复的档案或观测记录");
-      const mergedProfiles = [...importedProfiles, ...history.filter((item) => !importedProfiles.some((incoming) => incoming.id === item.id))].slice(0, 8);
-      const mergedObservations = [...importedObservations, ...observations.filter((item) => !importedObservations.some((incoming) => incoming.id === item.id))];
+      const mergedProfiles = [...history, ...importedProfiles.filter((item) => !history.some((local) => local.id === item.id))].slice(0, 8);
+      const importedRelationshipNotes: RelationshipNotesBackupEntry[] = normalizeRelationshipNotesBackupEntries(value.relationshipNotes ?? []);
+      if (!importedProfiles.length && !importedObservations.length && !importedRelationshipNotes.length) throw new Error("备份中没有可恢复的档案、观测或关系复盘记录");
+      const mergedObservations = [...observations, ...importedObservations.filter((item) => !observations.some((local) => local.id === item.id))];
       setHistory(mergedProfiles);
       updateObservations(mergedObservations);
-      localStorage.setItem("cyberfate-history", JSON.stringify(mergedProfiles));
-      flashNotice(`已恢复 ${importedProfiles.length} 个档案与 ${importedObservations.length} 条观测`, 3400);
+      try { localStorage.setItem("cyberfate-history", JSON.stringify(mergedProfiles)); } catch { throw new Error("浏览器无法写入本地档案，请检查隐私模式或可用空间"); }
+      const restoredRelationship = restoreRelationshipTimelineNotes(importedRelationshipNotes);
+      flashNotice(`已恢复 ${importedProfiles.length} 个档案、${importedObservations.length} 条观测与 ${restoredRelationship.restoredNotes} 条关系复盘`, 3800);
     } catch (error) {
       holdNotice(error instanceof Error ? error.message : "备份读取失败，请检查文件格式");
     }
@@ -316,8 +375,19 @@ export function CyberfateApp() {
     saveProductObservation("insight", insight.id, insight.title, questionForInsight(insight.id));
   }
 
-  function saveProductObservation(source: ObservationSource, sourceId: string, title: string, question: string, observedOn = new Date().toISOString().slice(0, 10)) {
+  function saveProductObservation(
+    source: ObservationSource,
+    sourceId: string,
+    title: string,
+    question: string,
+    observedOn = new Date().toISOString().slice(0, 10),
+    initial?: Pick<ObservationRecord, "status" | "note"> & { reviewOn?: string },
+  ) {
     if (!chart) return;
+    if (resultStale) {
+      holdNotice("资料已修改，请重新生成后再留下观察");
+      return;
+    }
     if (observations.some((record) => record.profileId === chart.profile.id && record.sourceId === sourceId)) return;
     const record = createObservationRecord({
       profileId: chart.profile.id,
@@ -327,11 +397,19 @@ export function CyberfateApp() {
       title,
       question,
       observedOn,
-      reviewOn: localDateAfter(30),
+      reviewOn: initial?.reviewOn ?? localDateAfter(30),
     });
-    updateObservations([record, ...observations]);
+    updateObservations([{ ...record, status: initial?.status ?? record.status, note: initial?.note ?? record.note }, ...observations]);
     trackLocalEvent("observation_saved", { source });
     flashNotice("问题已加入观测簿，日后可回来核对", 2600);
+  }
+
+  function saveGuidedObservation(draft: ObservationDraft) {
+    saveProductObservation(draft.source, draft.sourceId, draft.title, draft.question, draft.observedOn, {
+      status: draft.status,
+      note: draft.note,
+      reviewOn: draft.reviewOn,
+    });
   }
 
   function saveLimitedObservation(sourceId: string, title: string, question: string) {
@@ -356,7 +434,7 @@ export function CyberfateApp() {
           </button>
           <div className="top-actions">
             <button onClick={() => historyOpen ? closeHistory() : setHistoryOpen(true)}><Icon name="history" />档案</button>
-            <button onClick={exportChart} disabled={!hasResult} title={hasResult ? "导出当前命盘" : "生成命盘后可导出"}><Icon name="download" />导出</button>
+            <button onClick={() => setPendingExport("chart")} disabled={!hasResult || resultStale} title={resultStale ? "资料已修改，请重新生成后再导出" : hasResult ? "导出当前命盘" : "生成命盘后可导出"}><Icon name="download" />导出</button>
           </div>
         </header>
 
@@ -402,22 +480,23 @@ export function CyberfateApp() {
                 <span>{profile.timeKnown === false ? "当前精度" : "校正预览"}</span><b>{profile.timeKnown === false && draftHasDateTime ? "三柱" : !previewCorrection ? "待填写" : profile.useTrueSolarTime ? `${previewCorrection.minutes >= 0 ? "+" : ""}${previewCorrection.minutes} min` : "OFF"}</b>
                 <small>{!draftHasDateTime ? "填写日期与时间后显示校正结果" : profile.timeKnown === false ? "时柱与紫微盘暂不作为结论" : profile.useTrueSolarTime ? `校正后 ${previewBranch}时` : `${timeBranch}时`} {profile.timeKnown !== false && previewCorrection && `· 基准东经 120°${previewCorrection.dstMinutes !== 0 ? ` · 夏令时还原 ${previewCorrection.dstMinutes} min` : ""}`}</small>
               </div>
-              <button className="generate-button" disabled={!draftReady || isCalculating} onClick={generate}><Icon name="spark" /><span>{isCalculating ? "正在计算" : "生成我的观察"}<small>{draftReady ? "依当前资料起盘" : "请先完成必填资料"}</small></span><Icon name="arrow" /></button>
+              <button className="generate-button" disabled={!draftReady || isCalculating} onClick={generate}><Icon name="spark" /><span>{isCalculating ? "正在计算" : resultStale ? "重新生成我的观察" : "生成我的观察"}<small>{draftReady ? resultStale ? "应用刚才修改的资料" : "依当前资料起盘" : "请先完成必填资料"}</small></span><Icon name="arrow" /></button>
               <p className="privacy-note"><Icon name="compass" size={15} /> 本地计算 · 生辰不会上传</p>
             </div>
           </aside>
 
           <section className="content-stage">
             {hasResult && chart?.profile.id === "sample" && <div className="sample-mode-banner" role="status"><b>示例数据</b><span>当前内容用于体验功能，不代表你的命盘。</span><button onClick={startPersonalInput}>填写我的资料</button></div>}
-            {hasResult && <nav className="tabbar" role="tablist" aria-label="命盘视图">
+            {hasResult && !resultStale && <nav className="tabbar" role="tablist" aria-label="命盘视图">
               {TAB_ITEMS.map((item) => <button id={`view-tab-${item.id}`} aria-controls="view-panel" tabIndex={tab === item.id ? 0 : -1} role="tab" aria-selected={tab === item.id} key={item.id} className={tab === item.id ? "active" : ""} onKeyDown={(event) => handleTabArrow(event, TAB_ITEMS.map((entry) => entry.id), tab, navigateToTab, "view-tab-")} onClick={() => navigateToTab(item.id)}><span>{item.label}</span><small>{item.hint}</small></button>)}
             </nav>}
             <div className="view-container" id="view-panel" role={hasResult ? "tabpanel" : undefined} aria-labelledby={hasResult ? `view-tab-${tab}` : undefined}>
               {!hasResult && <OnboardingView intent={intent} onIntentChange={setIntent} onStart={startInput} onSample={showSample} />}
-              {hasResult && chart && tab === "overview" && (chart.profile.timeKnown === false ? <UnknownTimeOverview chart={chart} records={observations} onSave={saveLimitedObservation} onAddTime={requestKnownTime} /> : <Overview chart={chart} intent={intent} records={observations} onSaveInsight={saveInsight} onNavigate={navigateToTab} />)}
-              {hasResult && chart && tab === "explore" && <ExplorationView chart={chart} mode={exploreMode} records={observations} onModeChange={setExploreMode} onSaveInsight={saveInsight} onSaveObservation={saveProductObservation} onNavigate={navigateToTab} />}
-              {hasResult && chart && tab === "observations" && <ObservationView chart={chart} records={observations} onChange={updateObservations} onExplore={() => navigateToTab("overview")} />}
-              {hasResult && chart && tab === "expert" && <ExpertView chart={chart} mode={expertMode} onModeChange={setExpertMode} />}
+              {hasResult && resultStale && <section className="stale-result-notice" role="status"><div><span>结果待更新</span><h1>出生资料已修改</h1><p>当前结果仍基于上一次生成时的资料，尚未应用刚才的修改。请重新生成后再查看、导出或留下观察。</p></div><button disabled={!draftReady || isCalculating} onClick={generate}>{isCalculating ? "正在重新生成" : "按新资料重新生成"}</button></section>}
+              {hasResult && !resultStale && chart && tab === "overview" && (chart.profile.timeKnown === false ? <UnknownTimeOverview chart={chart} records={observations} onSave={saveLimitedObservation} onAddTime={requestKnownTime} /> : <Overview chart={chart} intent={intent} records={observations} onSaveInsight={saveInsight} onSaveGuidedObservation={saveGuidedObservation} onNavigate={navigateToTab} />)}
+              {hasResult && !resultStale && chart && tab === "explore" && <ExplorationView chart={chart} mode={exploreMode} records={observations} onModeChange={setExploreMode} onSaveInsight={saveInsight} onSaveObservation={saveProductObservation} onNavigate={navigateToTab} />}
+              {hasResult && !resultStale && chart && tab === "observations" && <ObservationView chart={chart} records={observations} onChange={updateObservations} onExplore={() => navigateToTab("overview")} />}
+              {hasResult && !resultStale && chart && tab === "expert" && <ExpertView chart={chart} mode={expertMode} onModeChange={setExpertMode} />}
               {isCalculating && !chart && <FeatureLoading />}
             </div>
           </section>
@@ -426,26 +505,60 @@ export function CyberfateApp() {
         {historyOpen && <div className="history-popover">
           <header><div><span>LOCAL ARCHIVE · {history.length}/8</span><h2>本地档案</h2></div><button onClick={closeHistory} aria-label="关闭本地档案">×</button></header>
           <div className="history-backup-actions">
-            <button onClick={exportBackup} disabled={!history.length && !observations.length}>备份全部</button>
+            <button onClick={() => setPendingExport("backup")} disabled={!history.length && !observations.length && !relationshipNotesAvailable}>备份全部</button>
             <button onClick={() => importInputRef.current?.click()}>恢复备份</button>
             <input ref={importInputRef} className="visually-hidden" type="file" accept="application/json,.json" onChange={importBackup} />
-            <p>备份包含全部本地档案与观测记录；恢复时会按记录编号合并，不覆盖同编号数据。</p>
+            <p>备份包含全部本地档案、观测与关系复盘；恢复时按记录编号合并，同编号数据以当前浏览器为准。</p>
           </div>
-          {history.length ? <>
-            <div className="history-list">{history.map((item) => <div className="history-item" key={item.id}>
-              <button className="history-load" onClick={() => loadProfile(item)}><span><b>{item.name || "未命名"}</b><small>{item.date} · {item.timeKnown === false ? "时辰未知" : item.time} · {item.gender}命</small></span><Icon name="arrow" /></button>
-              <button className={`history-delete ${pendingDeleteId === item.id ? "confirm" : ""}`} onClick={() => removeProfile(item.id)} aria-label={`${pendingDeleteId === item.id ? "确认删除" : "删除"}${item.name || "未命名档案"}`}>{pendingDeleteId === item.id ? "确认" : "删除"}</button>
-            </div>)}</div>
-            <div className="history-footer"><p>档案仅保存在当前浏览器，请定期备份。</p><button className={confirmClear ? "confirm" : ""} onClick={clearHistory}>{confirmClear ? "再次点击确认清空" : "清空全部"}</button></div>
-          </> : <div className="empty-history"><Icon name="history" size={28} /><p>生成命盘后会自动保存在这里，也可以从备份恢复。</p></div>}
+          {history.length ? <div className="history-list">{history.map((item) => <div className="history-item" key={item.id}>
+            <button className="history-load" onClick={() => loadProfile(item)}><span><b>{item.name || "未命名"}</b><small>{item.date} · {item.timeKnown === false ? "时辰未知" : item.time} · {item.gender}命</small></span><Icon name="arrow" /></button>
+            <button
+              className={`history-delete ${pendingDeleteId === item.id ? "confirm" : ""}`}
+              aria-expanded={pendingDeleteId === item.id}
+              aria-controls={`delete-options-${item.id}`}
+              onClick={() => {
+                setPendingDeleteId((current) => current === item.id ? null : item.id);
+                setConfirmClear(false);
+                setConfirmClearAllData(false);
+              }}
+              aria-label={`${pendingDeleteId === item.id ? "收起删除选项" : "删除"}${item.name || "未命名档案"}`}
+            >{pendingDeleteId === item.id ? "收起" : "删除"}</button>
+            {pendingDeleteId === item.id && <div className="history-delete-options" id={`delete-options-${item.id}`} role="group" aria-label={`删除${item.name || "未命名档案"}的范围`}>
+              <p><b>选择删除范围</b><span>关联数据包含该档案的现实观测和关系复盘。</span></p>
+              <button onClick={() => removeProfile(item.id, false)}>仅删除档案</button>
+              <button className="danger" onClick={() => removeProfile(item.id, true)}>档案及关联数据</button>
+              <button className="cancel" onClick={() => setPendingDeleteId(null)}>取消</button>
+            </div>}
+          </div>)}</div> : <div className="empty-history"><Icon name="history" size={28} /><p>当前没有档案；观测或关系复盘仍可能保存在本浏览器。</p></div>}
+          <div className="history-footer">
+            <p>档案和复盘只保存在当前浏览器，请定期备份。</p>
+            <div>
+              {history.length > 0 && <button className={confirmClear ? "confirm" : ""} onClick={clearHistory}>{confirmClear ? "再次点击清空档案" : "清空档案"}</button>}
+              <button className="clear-all-data" disabled={confirmClearAllData} onClick={() => { setConfirmClearAllData(true); setConfirmClear(false); setPendingDeleteId(null); }}>清除全部本地数据</button>
+            </div>
+          </div>
+          {confirmClearAllData && <div className="history-clear-confirm" role="alert">
+            <p><b>这会清除当前浏览器内的全部 Cyberfate 数据</b><span>包括档案、观测、关系复盘、匿名事件和本地错误日志。此操作无法撤销，建议先下载备份。</span></p>
+            <div><button onClick={() => setConfirmClearAllData(false)}>取消</button><button className="danger" onClick={clearAllLocalData}>确认清除全部</button></div>
+          </div>}
         </div>}
         {historyOpen && <button className="popover-backdrop" aria-label="关闭档案" onClick={closeHistory} />}
         {notice && <div className="toast" role="status" aria-live="polite"><Icon name="spark" size={15} />{notice}</div>}
+        {pendingExport && <PrivacyConfirmDialog
+          title={pendingExport === "chart" ? "导出当前命盘？" : "下载完整备份？"}
+          description={pendingExport === "chart"
+            ? "导出的 JSON 将包含档案名称、出生日期、出生时间、传统排盘口径、出生地经度、完整盘面，以及当前档案的观测记录。文件只会下载到你的设备，不会上传到 Cyberfate。请勿在共用或不受信任的设备上保存，也不要直接公开分享。"
+            : "备份将包含当前浏览器内的全部命盘档案、观测记录与关系复盘，可能涉及多人的称呼、生辰、排盘口径与经度。文件未加密，只会下载到你的设备，不会上传到 Cyberfate。请存放在可信位置，不要直接发送给他人。"}
+          confirmLabel={pendingExport === "chart" ? "确认下载" : "确认下载备份"}
+          onCancel={() => setPendingExport(null)}
+          onConfirm={pendingExport === "chart" ? downloadChart : downloadBackup}
+        />}
         <footer className="site-footer">
           <span>{ALGORITHM_VERSION} · LOCAL-FIRST</span>
           <p>观星台上无神通，只有历法与规则。所示皆传统之学，供文化研究与自我省察，不构成医疗、法律、财务或人生重大决策之依据。</p>
           <nav className="footer-links" aria-label="站内页面">
             <a href="/terms">术语词典</a>
+            <a href="/method">方法与来源</a>
           </nav>
         </footer>
       </main>

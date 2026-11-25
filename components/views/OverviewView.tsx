@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { buildChartReading, type ChartInsight } from "@/lib/insights";
 import type { FateChart } from "@/lib/types";
-import type { ObservationRecord } from "@/lib/observations";
+import type { ObservationDraft, ObservationRecord } from "@/lib/observations";
 import { PalaceCard, ElementBars } from "@/components/shared/chart-parts";
 import { Icon } from "@/components/shared/Icon";
-import { EvidenceCard, QuickReading, TimeUncertaintyNotice } from "@/components/shared/reading-parts";
+import { EvidenceCard, TimeUncertaintyNotice } from "@/components/shared/reading-parts";
+import { GuidedReadingPanel } from "@/components/GuidedReadingPanel";
+import { buildGuidedReport } from "@/lib/guided-reading";
 import type { ExploreMode, ObservationIntent, Tab, ViewMode } from "@/components/types";
 
 function UnknownTimeOverview({ chart, records, onSave, onAddTime }: {
@@ -36,16 +38,18 @@ function UnknownTimeOverview({ chart, records, onSave, onAddTime }: {
   </div>;
 }
 
-export function Overview({ chart, intent, records, onSaveInsight, onNavigate }: {
+export function Overview({ chart, intent, records, onSaveInsight, onSaveGuidedObservation, onNavigate }: {
   chart: FateChart;
   intent: ObservationIntent;
   records: ObservationRecord[];
   onSaveInsight: (insight: ChartInsight) => void;
+  onSaveGuidedObservation: (draft: ObservationDraft) => void;
   onNavigate: (tab: Tab, mode?: ViewMode) => void;
 }) {
   const lifePalace = chart.ziwei.palaces.find((p) => p.name === "命宫") ?? chart.ziwei.palaces[0];
   const majorStars = lifePalace.stars.filter((s) => s.type === "major").map((s) => s.name);
   const reading = buildChartReading(chart);
+  const guidedReport = buildGuidedReport(chart, intent);
   const [showAllInsights, setShowAllInsights] = useState(false);
   const sortedInsights = [...reading.insights].sort((a, b) => Number(a.index) - Number(b.index));
   const visibleInsights = showAllInsights ? sortedInsights : sortedInsights.slice(0, 3);
@@ -57,6 +61,15 @@ export function Overview({ chart, intent, records, onSaveInsight, onNavigate }: 
 
   return (
     <div className="view-stack">
+      <GuidedReadingPanel
+        report={guidedReport}
+        records={records}
+        profileId={chart.profile.id}
+        onExplore={(mode) => onNavigate("explore", mode)}
+        onValidate={onSaveGuidedObservation}
+        onOpenObservations={() => onNavigate("observations")}
+      />
+
       <section className="hero-dashboard">
         <div className="identity-block">
           <span className="eyebrow">本命档案</span>
@@ -84,8 +97,6 @@ export function Overview({ chart, intent, records, onSaveInsight, onNavigate }: 
           {"子丑寅卯辰巳午未申酉戌亥".split("").map((branch, index) => <em key={branch} style={{ "--i": index } as React.CSSProperties}>{branch}</em>)}
         </div>
       </section>
-
-      <QuickReading reading={reading} />
 
       <section className="orientation-panel">
         <div className="orientation-copy">

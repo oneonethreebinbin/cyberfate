@@ -68,7 +68,19 @@ export interface ShareCardInput {
   approximate: boolean;
 }
 
-/** 在浏览器内以 Canvas 绘制脱敏合盘分享卡；不引入任何图片资源，无跨域污染。 */
+export function buildAnonymizedCompatibilitySummary(report: CompatibilityReport, approximate: boolean) {
+  const dimensions = approximate ? report.dimensions.slice(0, 3) : report.dimensions;
+  return [
+    "CYBERFATE · 双人合盘 · A/B 摘要",
+    `A × B：${report.relationLabel}`,
+    report.headline,
+    ...dimensions.map((dimension) => `${dimension.name}｜${dimension.status}：${dimension.detail}`),
+    approximate ? "B 时辰未知：仅保留日柱层面的有限比较。" : "",
+    "传统规则推演，仅供共同讨论，不作为关系决策依据。分享前请确认对方知情。",
+  ].filter(Boolean).join("\n");
+}
+
+/** 在浏览器内以 Canvas 绘制 A/B 代称合盘分享卡；不引入任何图片资源，无跨域污染。 */
 export function renderCompatibilityShareCard({ report, aName, bName, approximate }: ShareCardInput): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -91,9 +103,9 @@ export function renderCompatibilityShareCard({ report, aName, bName, approximate
   // 页眉
   ctx.fillStyle = "#8fa3ab";
   ctx.font = `600 26px ${font}`;
-  ctx.fillText("CYBERFATE · 双人合盘 · 脱敏摘要", left, 110);
+  ctx.fillText("CYBERFATE · 双人合盘 · A/B 摘要", left, 110);
 
-  // 姓名对
+  // 分享卡只使用 A/B 代称；调用方也会固定传入 A/B。
   ctx.fillStyle = "#e9e4d8";
   ctx.font = `600 72px ${font}`;
   ctx.fillText(`${aName || "A"} × ${bName || "B"}`, left, 210);

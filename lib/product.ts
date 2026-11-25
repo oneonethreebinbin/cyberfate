@@ -1,4 +1,4 @@
-export const ALGORITHM_VERSION = "CF-RULES 1.1 · 2026.11";
+export const ALGORITHM_VERSION = "CF-RULES 1.2 · 2026.11";
 
 export type LocalProductEvent = {
   name: string;

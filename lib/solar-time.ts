@@ -2,13 +2,41 @@ import type { BirthProfile, SolarCorrection } from "@/lib/types";
 
 const EARTHLY_BRANCHES = ["子", "丑", "寅", "卯", "辰", "巳", "午", "未", "申", "酉", "戌", "亥"];
 
+/**
+ * 不带设备时区的民用时间。出生资料始终按产品声明的中国标准时间钟表字段解释；
+ * UTC 时间戳仅作为跨日加减分钟的算术载体，绝不代表真实 UTC 瞬间。
+ */
+export interface CivilDateTime {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+}
+
 function pad(value: number) {
   return String(value).padStart(2, "0");
 }
 
-function equationOfTimeMinutes(date: Date) {
-  const start = new Date(date.getFullYear(), 0, 0);
-  const day = Math.floor((date.getTime() - start.getTime()) / 86_400_000);
+function civilTimestamp({ year, month, day, hour, minute }: CivilDateTime) {
+  return Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+}
+
+function civilFromTimestamp(timestamp: number): CivilDateTime {
+  const date = new Date(timestamp);
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    hour: date.getUTCHours(),
+    minute: date.getUTCMinutes(),
+  };
+}
+
+function equationOfTimeMinutes(date: CivilDateTime) {
+  const start = Date.UTC(date.year, 0, 0);
+  const current = Date.UTC(date.year, date.month - 1, date.day);
+  const day = Math.floor((current - start) / 86_400_000);
   const b = ((360 / 365) * (day - 81) * Math.PI) / 180;
   return 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
 }
@@ -25,31 +53,33 @@ const DST_PERIODS: Array<[number, number, number, number, number, number]> = [
 
 // 1986–1991 年中国实行夏令时；起始日 02:00 起拨快一小时，结束日 02:00 拨回。
 // 因此结束日 00:00–01:59 仍属夏令时，出生时间需还原到前一日 23:xx 或当日 00:xx。
-function dstAdjustmentMinutes(date: Date): number {
+function dstAdjustmentMinutes(date: CivilDateTime): number {
+  const timestamp = civilTimestamp(date);
   for (const [sy, sm, sd, ey, em, ed] of DST_PERIODS) {
-    const start = new Date(sy, sm - 1, sd, 2);
-    const end = new Date(ey, em - 1, ed, 2);
-    if (date >= start && date < end) return -60;
+    const start = Date.UTC(sy, sm - 1, sd, 2);
+    const end = Date.UTC(ey, em - 1, ed, 2);
+    if (timestamp >= start && timestamp < end) return -60;
   }
   return 0;
 }
 
-export function correctSolarTime(profile: BirthProfile): { date: Date; detail: SolarCorrection } {
+export function correctSolarTime(profile: BirthProfile): { civil: CivilDateTime; detail: SolarCorrection } {
   const [year, month, day] = profile.date.split("-").map(Number);
   const [hour, minute] = profile.time.split(":").map(Number);
-  const clock = new Date(year, month - 1, day, hour, minute, 0, 0);
+  const clock: CivilDateTime = { year, month, day, hour, minute };
   const dstMinutes = dstAdjustmentMinutes(clock);
-  const standard = new Date(clock.getTime() + dstMinutes * 60_000);
+  const standardTimestamp = civilTimestamp(clock) + dstMinutes * 60_000;
+  const standard = civilFromTimestamp(standardTimestamp);
   const eot = equationOfTimeMinutes(standard);
   const longitudeOffset = (profile.longitude - 120) * 4;
   const solarAdjustment = profile.useTrueSolarTime ? eot + longitudeOffset : 0;
-  const corrected = new Date(standard.getTime() + solarAdjustment * 60_000);
+  const corrected = civilFromTimestamp(standardTimestamp + solarAdjustment * 60_000);
 
   return {
-    date: corrected,
+    civil: corrected,
     detail: {
       clockTime: `${profile.date} ${profile.time}`,
-      solarTime: `${corrected.getFullYear()}-${pad(corrected.getMonth() + 1)}-${pad(corrected.getDate())} ${pad(corrected.getHours())}:${pad(corrected.getMinutes())}`,
+      solarTime: `${corrected.year}-${pad(corrected.month)}-${pad(corrected.day)} ${pad(corrected.hour)}:${pad(corrected.minute)}`,
       minutes: Math.round(dstMinutes + solarAdjustment),
       equationOfTime: Math.round(eot * 10) / 10,
       longitudeOffset: Math.round(longitudeOffset * 10) / 10,

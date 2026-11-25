@@ -25,6 +25,19 @@ export function isBirthProfile(value: unknown): value is BirthProfile {
   return typeof item.id === "string" && typeof item.name === "string" && isValidBirthDate(item.date ?? "") && isValidTime(item.time ?? "") && (item.gender === "男" || item.gender === "女") && typeof item.longitude === "number" && item.longitude >= 73 && item.longitude <= 135 && typeof item.useTrueSolarTime === "boolean";
 }
 
+/** 比较会影响当前展示或计算的资料字段；允许草稿改回原值后自动恢复为最新状态。 */
+export function isSameBirthProfileInput(a: BirthProfile, b: BirthProfile) {
+  return (
+    a.name === b.name &&
+    a.date === b.date &&
+    a.time === b.time &&
+    (a.timeKnown !== false) === (b.timeKnown !== false) &&
+    a.gender === b.gender &&
+    a.longitude === b.longitude &&
+    a.useTrueSolarTime === b.useTrueSolarTime
+  );
+}
+
 export function downloadJson(filename: string, value: unknown) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);

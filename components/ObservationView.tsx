@@ -8,8 +8,10 @@ import {
   type ObservationRecord,
   type ObservationStatus,
 } from "@/lib/observations";
+import { PrivacyConfirmDialog } from "@/components/shared/PrivacyConfirmDialog";
 
-const STATUS_ORDER: ObservationStatus[] = ["matches", "differs", "uncertain"];
+const STATUS_ORDER: ObservationStatus[] = ["matches", "partial", "differs", "uncertain"];
+type ObservationExportKind = "journal" | "calendar";
 
 function today() {
   const date = new Date();
@@ -41,6 +43,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
   const [manualDate, setManualDate] = useState(today());
   const [manualReviewOn, setManualReviewOn] = useState(dateAfter(30));
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingExport, setPendingExport] = useState<ObservationExportKind | null>(null);
 
   const visibleRecords = useMemo(() => records
     .filter((record) => showAllProfiles || record.profileId === chart.profile.id)
@@ -51,17 +54,20 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
   const counts = {
     pending: visibleRecords.filter((record) => record.status === "pending").length,
     matches: visibleRecords.filter((record) => record.status === "matches").length,
+    partial: visibleRecords.filter((record) => record.status === "partial").length,
     differs: visibleRecords.filter((record) => record.status === "differs").length,
     uncertain: visibleRecords.filter((record) => record.status === "uncertain").length,
   };
 
   const summary = !reviewed.length
     ? "先留下一个问题或一段真实经历。等事实发生后再回来核对，不必急着证明任何结论。"
+    : counts.partial > 0 && counts.partial >= Math.max(counts.matches, counts.differs)
+      ? `已复盘 ${reviewed.length} 条，其中部分符合较多。建议保留“符合的部分”和“未对应的部分”，复盘时分别核对成立条件。`
     : counts.matches === counts.differs
-      ? `已复盘 ${reviewed.length} 条，有对应与暂无对应的记录相近。当前最重要的是继续积累反例和具体情境。`
+      ? `已复盘 ${reviewed.length} 条，符合与不符合的记录相近。当前最重要的是继续积累反例和具体情境。`
       : counts.matches > counts.differs
-        ? `已复盘 ${reviewed.length} 条，其中有对应经历较多。仍要保留暂无对应与不确定记录，避免只记住“说中”的部分。`
-        : `已复盘 ${reviewed.length} 条，其中暂无对应经历较多。这些反例同样重要，可以帮助你判断哪些规则对自己并不适用。`;
+        ? `已复盘 ${reviewed.length} 条，其中符合记录较多。仍要保留部分符合、不符合与不确定记录，避免只记住“说中”的部分。`
+        : `已复盘 ${reviewed.length} 条，其中不符合记录较多。这些反例同样重要，可以帮助你判断哪些规则对自己并不适用。`;
 
   function update(id: string, change: Partial<ObservationRecord>) {
     onChange(records.map((record) => record.id === id ? {
@@ -112,6 +118,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+    setPendingExport(null);
   }
 
   function exportReviewCalendar() {
@@ -136,6 +143,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+    setPendingExport(null);
   }
 
   return (
@@ -149,9 +157,10 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
         <div className="summary-copy"><span>阶段复盘</span><h2>{visibleRecords.length ? `已留下 ${visibleRecords.length} 条观测` : "从第一条现实记录开始"}</h2><p>{summary}</p>{dueCount > 0 && <b className="review-due-badge">有 {dueCount} 条已到复盘日期</b>}</div>
         <div className="summary-counts" aria-label="观测状态统计">
           <span><small>待观察</small><b>{counts.pending}</b></span>
-          <span><small>有对应</small><b>{counts.matches}</b></span>
-          <span><small>暂无对应</small><b>{counts.differs}</b></span>
-          <span><small>不确定</small><b>{counts.uncertain}</b></span>
+          <span><small>符合</small><b>{counts.matches}</b></span>
+          <span><small>部分符合</small><b>{counts.partial}</b></span>
+          <span><small>不符合</small><b>{counts.differs}</b></span>
+          <span><small>暂不确定</small><b>{counts.uncertain}</b></span>
         </div>
       </section>
 
@@ -171,7 +180,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
           <button className={!showAllProfiles ? "active" : ""} onClick={() => setShowAllProfiles(false)}>当前档案</button>
           <button className={showAllProfiles ? "active" : ""} onClick={() => setShowAllProfiles(true)}>全部档案</button>
         </div>
-        {!!visibleRecords.length && <div className="journal-actions"><button className="journal-export" onClick={exportJournal}>导出观测记录</button>{scheduled.length > 0 && <button className="journal-export" onClick={exportReviewCalendar}>加入日历提醒</button>}</div>}
+        {!!visibleRecords.length && <div className="journal-actions"><button className="journal-export" onClick={() => setPendingExport("journal")}>导出观测记录</button>{scheduled.length > 0 && <button className="journal-export" onClick={() => setPendingExport("calendar")}>加入日历提醒</button>}</div>}
       </div>
 
       {visibleRecords.length ? <section className="observation-list">
@@ -191,6 +200,15 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
       </section> : <section className="observation-empty">
         <div aria-hidden="true"><i /><b>记</b></div><span>还没有观测记录</span><h2>先留下一个值得回来的问题</h2><p>你可以从“此刻”的三条观察中选择一个，也可以记录已经发生的真实经历。</p><button onClick={onExplore}>返回此刻选择问题</button>
       </section>}
+      {pendingExport && <PrivacyConfirmDialog
+        title={pendingExport === "journal" ? "导出观测记录？" : "下载复盘日历？"}
+        description={pendingExport === "journal"
+          ? "导出的 JSON 将包含当前范围内的档案称呼、观察标题、现实问题、核对状态、自由笔记与日期。文件只会下载到你的设备，不会上传到 Cyberfate；请勿直接公开分享。"
+          : "日历文件将包含观察标题、现实问题与复盘日期。文件只会下载到你的设备；导入系统或第三方日历后，是否同步到云端取决于你的日历账户设置。"}
+        confirmLabel={pendingExport === "journal" ? "确认导出记录" : "确认下载日历"}
+        onCancel={() => setPendingExport(null)}
+        onConfirm={pendingExport === "journal" ? exportJournal : exportReviewCalendar}
+      />}
     </div>
   );
 }

@@ -30,11 +30,11 @@ test("相同输入得到完全相同的命盘", () => {
 });
 
 test("夏令时结束日 0 点后出生：日期还原到前一日", () => {
-  const { date, detail } = correctSolarTime(profile({ date: "1990-09-16", time: "00:30", longitude: 116.4 }));
+  const { civil, detail } = correctSolarTime(profile({ date: "1990-09-16", time: "00:30", longitude: 116.4 }));
   assert.equal(detail.dstMinutes, -60);
-  assert.equal(date.getFullYear(), 1990);
-  assert.equal(date.getMonth() + 1, 9);
-  assert.equal(date.getDate(), 15, "钟表时间 00:30 还原后应为前一日");
+  assert.equal(civil.year, 1990);
+  assert.equal(civil.month, 9);
+  assert.equal(civil.day, 15, "钟表时间 00:30 还原后应为前一日");
 });
 
 test("晚子时紫微按晚子时口径排盘", () => {

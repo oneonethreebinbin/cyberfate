@@ -1,4 +1,4 @@
-export type ObservationStatus = "pending" | "matches" | "differs" | "uncertain";
+export type ObservationStatus = "pending" | "matches" | "partial" | "differs" | "uncertain";
 export type ObservationSource = "insight" | "time" | "relationship" | "manual";
 
 export interface ObservationRecord {
@@ -20,10 +20,15 @@ export interface ObservationRecord {
 
 export const OBSERVATION_STATUS_META: Record<ObservationStatus, { label: string; short: string }> = {
   pending: { label: "等待观察", short: "待观察" },
-  matches: { label: "有对应经历", short: "有对应" },
-  differs: { label: "暂无对应经历", short: "暂无对应" },
-  uncertain: { label: "仍不确定", short: "不确定" },
+  matches: { label: "符合", short: "符合" },
+  partial: { label: "部分符合", short: "部分符合" },
+  differs: { label: "不符合", short: "不符合" },
+  uncertain: { label: "暂不确定", short: "暂不确定" },
 };
+
+export type ObservationDraft = Pick<ObservationRecord,
+  "source" | "sourceId" | "title" | "question" | "status" | "note" | "observedOn" | "reviewOn"
+>;
 
 export const INSIGHT_QUESTIONS: Record<string, string> = {
   "day-master": "最近面对压力或机会时，哪些做法让你更有余力，哪些会明显消耗你？",

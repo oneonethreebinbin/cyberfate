@@ -22,6 +22,7 @@ function validRecord(overrides: Partial<ObservationRecord> = {}): ObservationRec
 test("合法观测记录通过校验", () => {
   assert.equal(isObservationRecord(validRecord()), true);
   assert.equal(isObservationRecord(validRecord({ status: "matches" })), true);
+  assert.equal(isObservationRecord(validRecord({ status: "partial" })), true);
   assert.equal(isObservationRecord(validRecord({ source: "manual" })), true);
   assert.equal(isObservationRecord(validRecord({ reviewOn: "2026-12-23" })), true);
 });

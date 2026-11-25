@@ -24,6 +24,7 @@ export default function TermsPage() {
         <p>本词典收录应用内出现的八字、紫微与关系术语，每条均附使用边界。术语是观察坐标，不是结论；命理解读仅供文化研究与自我省察。</p>
         <div className="terms-hero-actions">
           <Link href="/">进入观星台</Link>
+          <Link href="/method">方法与来源</Link>
           <span>{ALGORITHM_VERSION}</span>
         </div>
       </header>
