@@ -8,6 +8,19 @@ export function localDateAfter(days: number) {
   return localDateValue(new Date(Date.now() + days * 86_400_000));
 }
 
+/** 设备本地时区的今日日期，供观察日期等输入框默认值使用（区别于按 UTC+8 计的 localDateValue）。 */
+export function deviceToday(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+}
+
+/** 设备本地时区往后推 N 天的日期。 */
+export function deviceDateAfter(days: number, date = new Date()) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return deviceToday(next);
+}
+
 export function isValidBirthDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < "1900-01-01" || value > localDateValue()) return false;
   const [year, month, day] = value.split("-").map(Number);

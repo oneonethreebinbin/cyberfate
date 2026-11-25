@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { buildChartReading, type ChartInsight } from "@/lib/insights";
 import type { FateChart } from "@/lib/types";
 import type { ObservationDraft, ObservationRecord } from "@/lib/observations";
@@ -49,7 +49,8 @@ export function Overview({ chart, intent, records, onSaveInsight, onSaveGuidedOb
   const lifePalace = chart.ziwei.palaces.find((p) => p.name === "命宫") ?? chart.ziwei.palaces[0];
   const majorStars = lifePalace.stars.filter((s) => s.type === "major").map((s) => s.name);
   const reading = buildChartReading(chart);
-  const guidedReport = buildGuidedReport(chart, intent);
+  // 导读融合三套推演，计算较重；只在命盘或视角变化时重算。
+  const guidedReport = useMemo(() => buildGuidedReport(chart, intent), [chart, intent]);
   const [showAllInsights, setShowAllInsights] = useState(false);
   const sortedInsights = [...reading.insights].sort((a, b) => Number(a.index) - Number(b.index));
   const visibleInsights = showAllInsights ? sortedInsights : sortedInsights.slice(0, 3);

@@ -356,10 +356,11 @@ export function CyberfateApp() {
       const importedRelationshipNotes: RelationshipNotesBackupEntry[] = normalizeRelationshipNotesBackupEntries(value.relationshipNotes ?? []);
       if (!importedProfiles.length && !importedObservations.length && !importedRelationshipNotes.length) throw new Error("备份中没有可恢复的档案、观测或关系复盘记录");
       const mergedObservations = [...observations, ...importedObservations.filter((item) => !observations.some((local) => local.id === item.id))];
-      setHistory(mergedProfiles);
-      updateObservations(mergedObservations);
+      // 先写盘、后动界面状态：写入失败时保持原状，避免"界面已恢复、刷新即失"。
       try { localStorage.setItem("cyberfate-history", JSON.stringify(mergedProfiles)); } catch { throw new Error("浏览器无法写入本地档案，请检查隐私模式或可用空间"); }
       const restoredRelationship = restoreRelationshipTimelineNotes(importedRelationshipNotes);
+      setHistory(mergedProfiles);
+      updateObservations(mergedObservations);
       flashNotice(`已恢复 ${importedProfiles.length} 个档案、${importedObservations.length} 条观测与 ${restoredRelationship.restoredNotes} 条关系复盘`, 3800);
     } catch (error) {
       holdNotice(error instanceof Error ? error.message : "备份读取失败，请检查文件格式");

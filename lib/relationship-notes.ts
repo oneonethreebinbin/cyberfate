@@ -49,11 +49,20 @@ export function normalizeRelationshipNotesBackupEntries(value: unknown): Relatio
     .map((entry) => ({ profileId: entry.profileId, notes: normalizeRelationshipTimelineNotes(entry.notes) }));
 }
 
+/** 同一年份逐字段合并：本地只存 text 时，备份里的 status 不会被抹去；同字段冲突时本地优先。 */
 export function mergeRelationshipTimelineNotes(
   local: RelationshipTimelineNotes,
   incoming: RelationshipTimelineNotes,
 ): RelationshipTimelineNotes {
-  return { ...incoming, ...local };
+  const merged: RelationshipTimelineNotes = {};
+  const years = new Set([...Object.keys(local), ...Object.keys(incoming)].map(Number));
+  for (const year of years) {
+    const localNote = local[year];
+    const incomingNote = incoming[year];
+    if (localNote && incomingNote) merged[year] = { ...incomingNote, ...localNote };
+    else merged[year] = localNote ?? incomingNote!;
+  }
+  return merged;
 }
 
 export function readRelationshipTimelineNotes(profileId: string): RelationshipTimelineNotes {

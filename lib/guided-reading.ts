@@ -1,6 +1,6 @@
 import { FORTUNE_STATE_META, buildFortuneReport } from "@/lib/fortune";
-import { buildChartReading } from "@/lib/insights";
-import { analyzeSingleRelationship } from "@/lib/relationship";
+import { buildChartReading, type ChartInsight } from "@/lib/insights";
+import { analyzeSingleRelationship, type RelationshipSignal } from "@/lib/relationship";
 import type { FateChart } from "@/lib/types";
 import type { ExploreMode, ObservationIntent } from "@/components/types";
 import { ALGORITHM_VERSION } from "@/lib/product";
@@ -149,13 +149,43 @@ function structureReport(report: LegacyGuidedReport): GuidedReport {
   };
 }
 
+// 导读条目或信号缺失时的兜底：宁可少一条证据，不让首屏塌掉。
+function fallbackInsight(id: string, title: string): ChartInsight {
+  return {
+    id,
+    index: "",
+    label: "暂缺",
+    title,
+    summary: "该条导读未按预期生成，请回到完整盘面对应面板查看。",
+    plain: "本条导读暂未生成；盘面字段仍在，宜直接查看完整盘面，勿据此占位作断。",
+    manifestations: [],
+    evidence: ["该条导读缺失，未取得盘面依据"],
+    alternative: "回到完整盘面对应面板阅读。",
+    limits: "此为兜底占位，不代表传统规则无此论法。",
+    tone: "neutral",
+  };
+}
+
+function fallbackSignal(title: string, detail: string): RelationshipSignal {
+  return {
+    title,
+    value: detail,
+    detail,
+    evidence: "该叙述未按预期生成，仅保留盘面坐标。",
+    alternative: "回到完整盘面阅读，勿据此单点作断。",
+    limits: "此为兜底占位，不代表传统规则无此论法。",
+    reflection: "先记录现实情况，再核对完整盘面。",
+    tone: "neutral",
+  };
+}
+
 function selfReport(chart: FateChart): LegacyGuidedReport {
   const reading = buildChartReading(chart);
   const byId = new Map(reading.insights.map((item) => [item.id, item]));
-  const strength = byId.get("day-master")!;
-  const relations = byId.get("branch-network")!;
-  const lifeBody = byId.get("life-body-axis")!;
-  const visible = byId.get("visible-patterns")!;
+  const strength = byId.get("day-master") ?? fallbackInsight("day-master", "日主旺衰");
+  const relations = byId.get("branch-network") ?? fallbackInsight("branch-network", "地支关系");
+  const lifeBody = byId.get("life-body-axis") ?? fallbackInsight("life-body-axis", "命身轴线");
+  const visible = byId.get("visible-patterns") ?? fallbackInsight("visible-patterns", "常见误读");
 
   return {
     intent: "self",
@@ -231,7 +261,7 @@ function timingReport(chart: FateChart): LegacyGuidedReport {
   const report = buildFortuneReport(chart);
   const current = report.current;
   const meta = FORTUNE_STATE_META[current.state];
-  const nextDistinct = report.years.find((item) => item.year !== current.year && item.state !== current.state) ?? report.years[1];
+  const nextDistinct = report.years.find((item) => item.year !== current.year && item.state !== current.state) ?? report.years[1] ?? current;
   const nextMeta = FORTUNE_STATE_META[nextDistinct.state];
   const daYun = report.currentDaYun;
 
@@ -305,9 +335,13 @@ function timingReport(chart: FateChart): LegacyGuidedReport {
 
 function relationshipReport(chart: FateChart): LegacyGuidedReport {
   const report = analyzeSingleRelationship(chart);
-  const spouse = report.signals.find((item) => item.title === "夫妻宫坐标")!;
-  const tension = report.signals.find((item) => item.title === "关系张力")!;
-  const ziwei = report.signals.find((item) => item.title === "紫微夫妻宫")!;
+  // 信号以标题定位（关系报告未提供结构化叙述键）；缺条时退回盘面字段占位，不让页面塌掉。
+  const spouse = report.signals.find((item) => item.title === "夫妻宫坐标")
+    ?? fallbackSignal("夫妻宫坐标", `夫妻宫落 ${report.spousePalace}，配偶星属${report.spouseElement}（${report.spouseDirection}）。`);
+  const tension = report.signals.find((item) => item.title === "关系张力")
+    ?? fallbackSignal("关系张力", "日支关系信号暂未生成；宜回到完整盘面查看地支关系面板。");
+  const ziwei = report.signals.find((item) => item.title === "紫微夫妻宫")
+    ?? fallbackSignal("紫微夫妻宫", `紫微夫妻宫位于 ${report.couplePalace.name}，主星叙述暂未生成。`);
   const notableYear = report.timeline.find((item) => item.level !== "平稳") ?? report.timeline[0];
 
   return {

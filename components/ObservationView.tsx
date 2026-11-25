@@ -9,22 +9,10 @@ import {
   type ObservationStatus,
 } from "@/lib/observations";
 import { PrivacyConfirmDialog } from "@/components/shared/PrivacyConfirmDialog";
+import { deviceDateAfter, deviceToday } from "@/lib/birth";
 
 const STATUS_ORDER: ObservationStatus[] = ["matches", "partial", "differs", "uncertain"];
 type ObservationExportKind = "journal" | "calendar";
-
-function today() {
-  const date = new Date();
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function dateAfter(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
 
 function escapeCalendarText(value: string) {
   return value.replaceAll("\\", "\\\\").replaceAll("\n", "\\n").replaceAll(",", "\\,").replaceAll(";", "\\;");
@@ -40,8 +28,8 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
   const [manualOpen, setManualOpen] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
   const [manualNote, setManualNote] = useState("");
-  const [manualDate, setManualDate] = useState(today());
-  const [manualReviewOn, setManualReviewOn] = useState(dateAfter(30));
+  const [manualDate, setManualDate] = useState(deviceToday());
+  const [manualReviewOn, setManualReviewOn] = useState(deviceDateAfter(30));
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingExport, setPendingExport] = useState<ObservationExportKind | null>(null);
 
@@ -50,7 +38,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
     .sort((a, b) => `${b.observedOn}${b.createdAt}`.localeCompare(`${a.observedOn}${a.createdAt}`)), [chart.profile.id, records, showAllProfiles]);
   const reviewed = visibleRecords.filter((record) => record.status !== "pending");
   const scheduled = visibleRecords.filter((record) => record.reviewOn);
-  const dueCount = scheduled.filter((record) => record.status === "pending" && record.reviewOn! <= today()).length;
+  const dueCount = scheduled.filter((record) => record.status === "pending" && record.reviewOn! <= deviceToday()).length;
   const counts = {
     pending: visibleRecords.filter((record) => record.status === "pending").length,
     matches: visibleRecords.filter((record) => record.status === "matches").length,
@@ -103,8 +91,8 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
     onChange([{ ...record, note }, ...records]);
     setManualTitle("");
     setManualNote("");
-    setManualDate(today());
-    setManualReviewOn(dateAfter(30));
+    setManualDate(deviceToday());
+    setManualReviewOn(deviceDateAfter(30));
     setManualOpen(false);
   }
 
@@ -113,7 +101,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `cyberfate-observations-${today()}.json`;
+    anchor.download = `cyberfate-observations-${deviceToday()}.json`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -138,7 +126,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `cyberfate-review-${today()}.ics`;
+    anchor.download = `cyberfate-review-${deviceToday()}.ics`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
@@ -168,7 +156,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
         <header><span>过去或此刻</span><h2>记录一段真实经历</h2><p>先写事实，再决定它是否对应某条观察。</p></header>
         <div>
           <label><span>发生日期</span><input type="date" value={manualDate} onChange={(event) => setManualDate(event.target.value)} /></label>
-          <label><span>计划复盘</span><input type="date" min={today()} value={manualReviewOn} onChange={(event) => setManualReviewOn(event.target.value)} /></label>
+          <label><span>计划复盘</span><input type="date" min={deviceToday()} value={manualReviewOn} onChange={(event) => setManualReviewOn(event.target.value)} /></label>
           <label><span>简短标题</span><input value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} placeholder="例如：换了新的工作方向" /></label>
           <label className="manual-note"><span>发生了什么</span><textarea value={manualNote} onChange={(event) => setManualNote(event.target.value)} placeholder="只写你愿意留在本机的事实与感受" /></label>
           <button onClick={addManualRecord} disabled={!manualTitle.trim() && !manualNote.trim()}>保存到观测簿</button>
@@ -193,7 +181,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
           <div className="observation-status" role="group" aria-label="现实核对状态">
             {STATUS_ORDER.map((status) => <button key={status} aria-pressed={record.status === status} className={record.status === status ? "active" : ""} onClick={() => update(record.id, { status })}>{OBSERVATION_STATUS_META[status].short}</button>)}
           </div>
-          <label className="review-date-field"><span>下次复盘日期</span><input type="date" min={today()} value={record.reviewOn ?? ""} onChange={(event) => update(record.id, { reviewOn: event.target.value || undefined })} /></label>
+          <label className="review-date-field"><span>下次复盘日期</span><input type="date" min={deviceToday()} value={record.reviewOn ?? ""} onChange={(event) => update(record.id, { reviewOn: event.target.value || undefined })} /></label>
           <label><span>现实记录</span><textarea value={record.note} onChange={(event) => update(record.id, { note: event.target.value })} placeholder="记录对应、反例、当时情境或仍不确定的原因" /></label>
           <footer><span>{record.profileName} · 只保存在当前浏览器</span><button className={pendingDelete === record.id ? "confirm" : ""} onClick={() => remove(record.id)}>{pendingDelete === record.id ? "再次点击确认删除" : "删除"}</button></footer>
         </article>)}

@@ -9,21 +9,11 @@ import type { ObservationDraft, ObservationRecord, ObservationStatus } from "@/l
 import { OBSERVATION_STATUS_META } from "@/lib/observations";
 import { trackLocalEvent } from "@/lib/product";
 import { METHOD_REFERENCES } from "@/lib/references";
+import { deviceDateAfter, deviceToday } from "@/lib/birth";
 import styles from "./GuidedReadingPanel.module.css";
 
 const VALIDATION_STATUSES: Exclude<ObservationStatus, "pending">[] = ["matches", "partial", "differs", "uncertain"];
 const SOURCE_NAMES = new Map(METHOD_REFERENCES.map((item) => [item.id, item.title]));
-
-function localDateAfter(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
-}
-
-function today() {
-  return localDateAfter(0);
-}
 
 function EvidenceLedger({ evidence, compact = false }: { evidence: RuleEvidence; compact?: boolean }) {
   return <div className={`${styles.ledger} ${compact ? styles.compactLedger : ""}`}>
@@ -59,8 +49,8 @@ export function GuidedReadingPanel({ report, records, profileId, onExplore, onVa
   const [activeValidation, setActiveValidation] = useState<string | null>(null);
   const [validationStatus, setValidationStatus] = useState<Exclude<ObservationStatus, "pending">>("uncertain");
   const [validationNote, setValidationNote] = useState("");
-  const [observedOn, setObservedOn] = useState(today());
-  const [reviewOn, setReviewOn] = useState(localDateAfter(30));
+  const [observedOn, setObservedOn] = useState(deviceToday());
+  const [reviewOn, setReviewOn] = useState(deviceDateAfter(30));
   const selected = report.questions.find((item) => item.id === activeQuestion) ?? null;
   const validating = report.themes.find((item) => item.id === activeValidation) ?? null;
 
@@ -73,8 +63,8 @@ export function GuidedReadingPanel({ report, records, profileId, onExplore, onVa
     setActiveValidation((current) => current === id ? null : id);
     setValidationStatus("uncertain");
     setValidationNote("");
-    setObservedOn(today());
-    setReviewOn(localDateAfter(30));
+    setObservedOn(deviceToday());
+    setReviewOn(deviceDateAfter(30));
   }
 
   function saveValidation() {
@@ -137,7 +127,7 @@ export function GuidedReadingPanel({ report, records, profileId, onExplore, onVa
         </div>
         <div className={styles.validationFields}>
           <label><span>现实事件或反例</span><textarea value={validationNote} onChange={(event) => setValidationNote(event.target.value)} placeholder="写下发生了什么、当时情境，或为什么暂时无法判断" /></label>
-          <div><label><span>观察日期</span><input type="date" value={observedOn} onChange={(event) => setObservedOn(event.target.value)} /></label><label><span>指定复盘日期</span><input type="date" min={today()} value={reviewOn} onChange={(event) => setReviewOn(event.target.value)} /></label></div>
+          <div><label><span>观察日期</span><input type="date" value={observedOn} onChange={(event) => setObservedOn(event.target.value)} /></label><label><span>指定复盘日期</span><input type="date" min={deviceToday()} value={reviewOn} onChange={(event) => setReviewOn(event.target.value)} /></label></div>
         </div>
         <footer><p>符合、部分符合、不符合都同样保留；记录不会反向改写排盘结果。</p><button onClick={saveValidation}>保存验证与复盘计划</button></footer>
       </section>}
