@@ -96,7 +96,8 @@ export function getFlowStartYear(now = new Date()): number {
   return calendarYear;
 }
 
-function analyzeYear(chart: FateChart, year: number): FortuneYear {
+/** 任一公历年的流年取象（年柱取该年立春之后口径）。 */
+export function analyzeYear(chart: FateChart, year: number): FortuneYear {
   const eight = Solar.fromYmdHms(year, 6, 15, 12, 0, 0).getLunar().getEightChar();
   const gan = eight.getYearGan();
   const zhi = eight.getYearZhi();

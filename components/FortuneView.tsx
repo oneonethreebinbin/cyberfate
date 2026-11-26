@@ -4,19 +4,10 @@ import { buildFortuneCalendar } from "@/lib/calendar-export";
 import { trackLocalEvent } from "@/lib/product";
 import type { FateChart } from "@/lib/types";
 import { TerminologyPanel } from "@/components/TerminologyPanel";
+import { ScoreStrip } from "@/components/shared/reading-parts";
+import { FortuneCalendar } from "@/components/FortuneCalendar";
 
 const STATE_ORDER: FortuneState[] = ["favorable", "caution", "change", "limited", "mixed", "quiet"];
-
-function ScoreStrip({ scores }: { scores: { support: number; pressure: number; movement: number; depletion: number } }) {
-  return (
-    <div className="fortune-score-strip" aria-label="规则信号计数">
-      <span><small>助势</small><b>{scores.support}</b></span>
-      <span><small>制约</small><b>{scores.pressure}</b></span>
-      <span><small>动象</small><b>{scores.movement}</b></span>
-      <span><small>耗势</small><b>{scores.depletion}</b></span>
-    </div>
-  );
-}
 
 export function FortuneView({ chart, savedSourceIds = [], onSaveObservation }: {
   chart: FateChart;
@@ -101,6 +92,8 @@ export function FortuneView({ chart, savedSourceIds = [], onSaveObservation }: {
           {onSaveObservation && <button className={dailySaved ? "fortune-save saved" : "fortune-save"} disabled={dailySaved} onClick={() => onSaveObservation(dailySourceId, `流日 ${daily.ganZhi} · ${dailyMeta.label}`, daily.observation, daily.date)}>{dailySaved ? "已加入观测簿" : "记下今日"}</button>}
         </div>
       </section>
+
+      <FortuneCalendar chart={chart} savedSourceIds={savedSourceIds} onSaveObservation={onSaveObservation} />
 
       <section className="fortune-method">
         <div><span>本次已观</span><p>{report.included.map((item) => <b key={item}>{item}</b>)}</p></div>

@@ -1807,3 +1807,83 @@ fieldset legend small { margin-left: 5px; color: #818b87; font-size: 11px; font-
   .evidence-sufficiency { grid-template-columns: 1fr; gap: 5px; padding: 14px 12px; }
   .identity-block h2 { font-size: 36px; }
 }
+
+/* ---- fortune calendar: in-app day / month / year observatory ---- */
+.fortune-calendar-section { gap: 26px; }
+.fcal { border: 1px solid var(--line); background: rgba(14,24,26,.65); }
+.fcal-year { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
+.fcal-year-main { flex: 0 0 auto; min-width: 172px; padding: 15px 20px; border-right: 1px solid var(--line); display: grid; gap: 4px; align-content: center; }
+.fcal-year-main > span { color: var(--state-accent); font: 12px var(--mono); letter-spacing: .1em; }
+.fcal-year-main > b { color: #e0d6ba; font: 400 24px var(--display); letter-spacing: .05em; }
+.fcal-year-main > em { color: #a5aca6; font-size: 12px; font-style: normal; }
+.fcal-year-main > em::first-letter { color: var(--state-accent); }
+.fcal-months { min-width: 0; display: grid; grid-template-columns: repeat(12, minmax(56px, 1fr)); overflow-x: auto; }
+.fcal-month-chip { min-width: 0; min-height: 62px; padding: 8px 4px; border: 0; border-right: 1px solid var(--line); border-bottom: 2px solid transparent; background: transparent; cursor: pointer; display: grid; gap: 5px; place-items: center; align-content: center; }
+.fcal-month-chip:last-child { border-right: 0; }
+.fcal-month-chip > b { color: #b9beb7; font: 13px var(--mono); }
+.fcal-month-chip > i { width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--state-accent) 52%, transparent); color: var(--state-accent); font: normal 13px var(--display); font-style: normal; }
+.fcal-month-chip:hover { background: rgba(255,255,255,.03); }
+.fcal-month-chip.current { border-bottom-color: var(--state-accent); background: var(--state-wash); }
+.fcal-month-chip.current > b { color: var(--paper); }
+
+.fcal-main { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(300px, .82fr); }
+.fcal-grid-wrap { min-width: 0; padding: 0 0 18px; }
+.fcal-toolbar { padding: 15px 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.fcal-toolbar-nav { display: flex; align-items: center; gap: 12px; }
+.fcal-toolbar-nav button { width: 34px; height: 34px; border: 1px solid var(--line); background: transparent; color: #b9beb7; font-size: 17px; line-height: 1; cursor: pointer; }
+.fcal-toolbar-nav button:hover { border-color: var(--line-strong); color: var(--paper); }
+.fcal-toolbar-nav > b { color: #ddd2b4; font: 400 15px var(--display); letter-spacing: .04em; }
+.fcal-toolbar-nav > b em { margin-left: 9px; padding: 3px 7px; color: var(--state-accent); border: 1px solid color-mix(in srgb, var(--state-accent) 42%, transparent); font: 11px var(--sans); font-style: normal; }
+.fcal-today-btn { padding: 8px 13px; border: 1px solid var(--line); background: transparent; color: var(--paper-muted); font-size: 12px; cursor: pointer; }
+.fcal-today-btn:hover { color: var(--jade); border-color: rgba(98,168,143,.42); }
+.fcal-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.fcal-week span { padding: 8px 0; color: #98a09b; font-size: 11px; text-align: center; }
+.fcal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.fcal-cell { position: relative; min-height: 62px; padding: 9px 8px 7px; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--state-accent) 15%, transparent); box-shadow: inset 4px 0 0 var(--state-accent); cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; }
+.fcal-cell:nth-child(7n) { border-right: 0; }
+.fcal-cell > b { color: color-mix(in srgb, var(--state-accent) 68%, #e2e6de); font: 500 14px var(--mono); }
+.fcal-cell > small { color: #848d88; font-size: 11px; line-height: 1.2; }
+.fcal-cell:hover { background: color-mix(in srgb, var(--state-accent) 21%, transparent); }
+.fcal-cell.fcal-out { background: color-mix(in srgb, var(--state-accent) 6%, transparent); box-shadow: inset 4px 0 0 color-mix(in srgb, var(--state-accent) 26%, transparent); }
+.fcal-cell.fcal-out > b, .fcal-cell.fcal-out > small { opacity: .38; }
+.fcal-cell.fcal-selected { background: color-mix(in srgb, var(--state-accent) 24%, transparent); box-shadow: inset 0 0 0 1px var(--state-accent), inset 4px 0 0 var(--state-accent); }
+.fcal-cell.fcal-selected > b { color: var(--paper); }
+.fcal-cell.fcal-is-today > b { margin: -1px 0; padding: 1px 6px; background: var(--jade); color: #0d1719; font-weight: 700; }
+.fcal-legend { margin: 14px 18px 0; display: flex; flex-wrap: wrap; gap: 10px 18px; }
+.fcal-legend span { display: inline-flex; align-items: center; gap: 7px; color: #98a09b; font-size: 12px; }
+.fcal-legend span.state-favorable, .fcal-legend span.state-caution, .fcal-legend span.state-change, .fcal-legend span.state-limited, .fcal-legend span.state-mixed, .fcal-legend span.state-quiet { color: color-mix(in srgb, var(--state-accent) 62%, #9aa19b); }
+.fcal-legend i { width: 13px; height: 13px; background: var(--state-accent); }
+.fcal-note { margin: 12px 18px 0; color: #8b948f; font-size: 12px; line-height: 1.6; }
+
+.fcal-detail { position: relative; min-width: 0; padding: 24px 26px; border-left: 1px solid var(--line); border-top: 2px solid var(--state-accent); background: linear-gradient(160deg, var(--state-wash), rgba(15,26,28,.6) 46%); display: grid; gap: 12px; align-content: start; }
+.fcal-detail > span { color: var(--state-accent); font: 12px var(--mono); letter-spacing: .08em; line-height: 1.7; }
+.fcal-detail h3 { margin: 4px 0 0; color: #e0d6ba; font: 400 30px var(--display); letter-spacing: .05em; }
+.fcal-detail-subtitle { margin: 0; color: #ddd2b4; font: 400 16px var(--display); }
+.fcal-detail > p:not(.fcal-detail-subtitle) { margin: 0; color: #a4aaa5; font-size: 13px; line-height: 1.7; }
+.fcal-detail .fortune-score-strip { margin-top: 8px; }
+.fcal-evidence { display: grid; gap: 9px; }
+.fcal-evidence > b { color: #c6c8bf; font-size: 11px; font-weight: 500; letter-spacing: .07em; }
+.fcal-evidence ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.fcal-evidence li { padding-left: 14px; color: #b0b5ae; font-size: 12px; line-height: 1.65; position: relative; }
+.fcal-evidence li::before { content: ""; position: absolute; left: 0; top: .65em; width: 5px; height: 1px; background: var(--state-accent); }
+.fcal-evidence p { margin: 0; padding: 12px 13px; border-left: 2px solid var(--state-accent); background: rgba(255,255,255,.02); color: #9da59f; font-size: 12px; line-height: 1.7; }
+.fcal-evidence p b { display: block; margin-bottom: 4px; color: #d4d1c5; font-size: 11px; font-weight: 500; }
+
+@media (max-width: 1100px) {
+  .fcal-main { grid-template-columns: 1fr; }
+  .fcal-detail { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+@media (max-width: 720px) {
+  .fcal-year { flex-direction: column; }
+  .fcal-year-main { border-right: 0; border-bottom: 1px solid var(--line); }
+  .fcal-months { grid-template-columns: repeat(6, 1fr); overflow: hidden; }
+  .fcal-month-chip { min-height: 52px; border-bottom: 1px solid var(--line); }
+  .fcal-month-chip:nth-child(6n) { border-right: 0; }
+  .fcal-month-chip:nth-child(n+7) { border-bottom: 0; }
+  .fcal-cell { min-height: 48px; padding: 6px 5px; }
+  .fcal-cell > small { display: none; }
+  .fcal-detail { padding: 20px 18px; }
+  .fcal-detail h3 { font-size: 26px; }
+}
+

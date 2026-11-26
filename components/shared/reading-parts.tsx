@@ -8,6 +8,17 @@ import { questionForInsight } from "@/lib/observations";
 import { Icon } from "@/components/shared/Icon";
 import type { ExpertMode, Tab, ViewMode } from "@/components/types";
 
+export function ScoreStrip({ scores }: { scores: { support: number; pressure: number; movement: number; depletion: number } }) {
+  return (
+    <div className="fortune-score-strip" aria-label="规则信号计数">
+      <span><small>助势</small><b>{scores.support}</b></span>
+      <span><small>制约</small><b>{scores.pressure}</b></span>
+      <span><small>动象</small><b>{scores.movement}</b></span>
+      <span><small>耗势</small><b>{scores.depletion}</b></span>
+    </div>
+  );
+}
+
 export function TermHint({ scope, term, open, onToggle }: { scope: GlossaryScope; term: string; open: boolean; onToggle: () => void }) {
   const entry = GLOSSARY[scope].find((item) => item.term === term);
   if (!entry) return null;
