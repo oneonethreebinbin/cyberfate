@@ -190,7 +190,11 @@ function selfReport(chart: FateChart): LegacyGuidedReport {
   return {
     intent: "self",
     eyebrow: "先回答你 · 了解自己",
-    title: strength.plain.split("。")[0] + "。",
+    title: chart.bazi.strength.verdict === "身弱"
+      ? "有准备、有支持时，你更容易把状态真正展开。"
+      : chart.bazi.strength.verdict === "身强"
+        ? "把力量集中在少数事情上，比同时承担更多更有帮助。"
+        : "你的状态会随环境改变，不必急着把自己固定成一种标签。",
     summary: `${relations.plain} ${lifeBody.plain}`,
     recommendation: chart.bazi.strength.verdict === "身弱"
       ? "先辨认哪些资源、协作和准备会显著改善你的状态，再决定是否增加承担。"
@@ -268,7 +272,7 @@ function timingReport(chart: FateChart): LegacyGuidedReport {
   return {
     intent: "timing",
     eyebrow: "先回答你 · 阶段变化",
-    title: `${current.year} 年的主调是“${meta.label}”：${meta.explanation}`,
+    title: `${current.year} 年，更值得观察“${meta.label}”带来的节奏变化。`,
     summary: `${meta.subtitle}${daYun ? ` 当前同时处于 ${daYun.ganZhi} 大运（${daYun.startYear}–${daYun.endYear}），流年需要放在这段十年背景里看。` : ""}`,
     recommendation: current.observation,
     themes: [
@@ -347,7 +351,7 @@ function relationshipReport(chart: FateChart): LegacyGuidedReport {
   return {
     intent: "relationship",
     eyebrow: "先回答你 · 关系议题",
-    title: `${spouse.detail}`,
+    title: "先看你如何进入关系，再看双方怎样协商距离与责任。",
     summary: `${tension.detail} ${ziwei.detail}`,
     recommendation: "先把亲密距离、责任分配和变化节奏拆开讨论；关系结构只提供提问方向，不替双方判定合或不合。",
     themes: [

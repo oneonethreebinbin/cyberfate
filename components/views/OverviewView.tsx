@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { buildChartReading, type ChartInsight } from "@/lib/insights";
 import type { FateChart } from "@/lib/types";
 import type { ObservationDraft, ObservationRecord } from "@/lib/observations";
@@ -9,7 +9,7 @@ import { Icon } from "@/components/shared/Icon";
 import { EvidenceCard, TimeUncertaintyNotice } from "@/components/shared/reading-parts";
 import { GuidedReadingPanel } from "@/components/GuidedReadingPanel";
 import { buildGuidedReport } from "@/lib/guided-reading";
-import type { ExploreMode, ObservationIntent, Tab, ViewMode } from "@/components/types";
+import type { ExploreMode, ObservationIntent, ReadingDepth, Tab, ViewMode } from "@/components/types";
 
 function UnknownTimeOverview({ chart, records, onSave, onAddTime }: {
   chart: FateChart;
@@ -38,22 +38,23 @@ function UnknownTimeOverview({ chart, records, onSave, onAddTime }: {
   </div>;
 }
 
-export function Overview({ chart, intent, records, onSaveInsight, onSaveGuidedObservation, onNavigate }: {
+export function Overview({ chart, intent, records, readingDepth, onReadingDepthChange, onSaveInsight, onSaveGuidedObservation, onNavigate }: {
   chart: FateChart;
   intent: ObservationIntent;
   records: ObservationRecord[];
+  readingDepth: ReadingDepth;
+  onReadingDepthChange: (depth: ReadingDepth) => void;
   onSaveInsight: (insight: ChartInsight) => void;
   onSaveGuidedObservation: (draft: ObservationDraft) => void;
   onNavigate: (tab: Tab, mode?: ViewMode) => void;
 }) {
   const lifePalace = chart.ziwei.palaces.find((p) => p.name === "命宫") ?? chart.ziwei.palaces[0];
   const majorStars = lifePalace.stars.filter((s) => s.type === "major").map((s) => s.name);
-  const reading = buildChartReading(chart);
+  const reading = useMemo(() => buildChartReading(chart), [chart]);
   // 导读融合三套推演，计算较重；只在命盘或视角变化时重算。
   const guidedReport = useMemo(() => buildGuidedReport(chart, intent), [chart, intent]);
-  const [showAllInsights, setShowAllInsights] = useState(false);
   const sortedInsights = [...reading.insights].sort((a, b) => Number(a.index) - Number(b.index));
-  const visibleInsights = showAllInsights ? sortedInsights : sortedInsights.slice(0, 3);
+  const additionalInsights = sortedInsights.slice(3);
   const nextStep = intent === "timing"
     ? { eyebrow: "接下来", title: "把观察放进时间", detail: "查看当前大运、流年与未来六年的支持和变动信号。", tab: "explore" as Tab, mode: "timing" as ExploreMode }
     : intent === "relationship"
@@ -66,15 +67,19 @@ export function Overview({ chart, intent, records, onSaveInsight, onSaveGuidedOb
         report={guidedReport}
         records={records}
         profileId={chart.profile.id}
+        depth={readingDepth}
+        onDepthChange={onReadingDepthChange}
         onExplore={(mode) => onNavigate("explore", mode)}
         onValidate={onSaveGuidedObservation}
         onOpenObservations={() => onNavigate("observations")}
       />
 
+      <details className="chart-coordinates-panel">
+        <summary><span>盘面坐标</span><b>查看出生档案、四柱与命宫骨架</b><small>专业信息按需展开</small></summary>
       <section className="hero-dashboard">
         <div className="identity-block">
           <span className="eyebrow">本命档案</span>
-          <h1>{chart.profile.name || "未命名命盘"}</h1>
+          <h2>{chart.profile.name || "未命名命盘"}</h2>
           <div className="calendar-coordinates">
             <span><small>紫微农历干支</small>{chart.ziwei.chineseDate}</span>
             <span><small>子平节气四柱</small>{chart.bazi.pillars.map((pillar) => `${pillar.gan}${pillar.zhi}`).join(" ")}</span>
@@ -143,22 +148,20 @@ export function Overview({ chart, intent, records, onSaveInsight, onSaveGuidedOb
           </div>
         </section>
       </div>
+      </details>
 
       <section className="next-step-panel">
         <div><span>{nextStep.eyebrow}</span><h2>{nextStep.title}</h2><p>{nextStep.detail}</p></div>
         <button onClick={() => onNavigate(nextStep.tab, nextStep.mode)}>继续观察 <Icon name="arrow" /></button>
       </section>
 
-      <section className="reading-panel">
-        <div className="section-heading">
-          <div><span>两盘参看 · 可展开证据</span><h2>{showAllInsights ? "完整观察" : "三条核心观察"}</h2></div>
-          <span className="method-badge">规则推演 · 不作妄断</span>
-        </div>
-        <div className="evidence-grid">
-          {visibleInsights.map((insight) => <EvidenceCard key={insight.id} insight={insight} onNavigate={onNavigate} onSave={onSaveInsight} saved={records.some((record) => record.profileId === chart.profile.id && record.sourceId === insight.id)} />)}
-        </div>
-        {sortedInsights.length > 3 && <button className="reading-more" onClick={() => setShowAllInsights((value) => !value)}>{showAllInsights ? "收起其余观察" : `展开其余 ${sortedInsights.length - 3} 条观察`} <Icon name="arrow" size={15} /></button>}
-      </section>
+      {additionalInsights.length > 0 && <details className="additional-insights">
+        <summary><span>更多盘面线索</span><b>展开其余 {additionalInsights.length} 条观察</b><small>不会重复上面的三条核心线索</small></summary>
+        <section className="reading-panel">
+          <div className="section-heading"><div><span>两盘参看 · 可留下问题</span><h2>补充观察</h2></div><span className="method-badge">规则推演 · 不作妄断</span></div>
+          <div className="evidence-grid">{additionalInsights.map((insight) => <EvidenceCard key={insight.id} insight={insight} onNavigate={onNavigate} onSave={onSaveInsight} saved={records.some((record) => record.profileId === chart.profile.id && record.sourceId === insight.id)} />)}</div>
+        </section>
+      </details>}
     </div>
   );
 }

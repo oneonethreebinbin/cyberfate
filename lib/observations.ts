@@ -18,6 +18,12 @@ export interface ObservationRecord {
   reviewOn?: string;
 }
 
+export interface ObservationSufficiency {
+  level: "insufficient" | "early" | "growing";
+  label: string;
+  detail: string;
+}
+
 export const OBSERVATION_STATUS_META: Record<ObservationStatus, { label: string; short: string }> = {
   pending: { label: "等待观察", short: "待观察" },
   matches: { label: "符合", short: "符合" },
@@ -40,6 +46,32 @@ export const INSIGHT_QUESTIONS: Record<string, string> = {
 
 export function questionForInsight(insightId: string) {
   return INSIGHT_QUESTIONS[insightId] ?? "这条观察在现实中有什么对应或反例？";
+}
+
+/** 只描述记录是否足够形成稳定印象，不把样本数量包装成算法准确率。 */
+export function getObservationSufficiency(records: ObservationRecord[]): ObservationSufficiency {
+  const reviewed = records.filter((record) => record.status !== "pending");
+  const hasMixedEvidence = reviewed.some((record) => record.status === "matches")
+    && reviewed.some((record) => record.status === "differs");
+  if (reviewed.length < 3) {
+    return {
+      level: "insufficient",
+      label: "样本不足",
+      detail: `已复盘 ${reviewed.length} 条；先积累至少 3 条具体经历，再看是否出现重复模式。`,
+    };
+  }
+  if (reviewed.length < 6) {
+    return {
+      level: "early",
+      label: hasMixedEvidence ? "初步信号 · 结果混合" : "初步信号",
+      detail: `已复盘 ${reviewed.length} 条；可以留意方向，但仍不足以当作稳定结论。`,
+    };
+  }
+  return {
+    level: "growing",
+    label: hasMixedEvidence ? "持续积累 · 结果混合" : "持续积累",
+    detail: `已复盘 ${reviewed.length} 条；请继续保留反例和发生情境，避免只记录符合项。`,
+  };
 }
 
 const OBSERVATION_SOURCES: ObservationSource[] = ["insight", "time", "relationship", "manual"];

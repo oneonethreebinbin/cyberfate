@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isObservationRecord, readObservationRecords, type ObservationRecord, type ObservationSource, type ObservationStatus } from "../lib/observations";
+import { getObservationSufficiency, isObservationRecord, readObservationRecords, type ObservationRecord, type ObservationSource, type ObservationStatus } from "../lib/observations";
 
 function validRecord(overrides: Partial<ObservationRecord> = {}): ObservationRecord {
   return {
@@ -40,4 +40,15 @@ test("非法观测记录被拒绝", () => {
 
 test("无 window 环境下读取返回空数组", () => {
   assert.deepEqual(readObservationRecords(), []);
+});
+
+test("记录充分度只反映已复盘样本数量，并提示混合结果", () => {
+  assert.equal(getObservationSufficiency([]).label, "样本不足");
+  assert.equal(getObservationSufficiency([
+    validRecord({ id: "1", status: "matches" }),
+    validRecord({ id: "2", status: "partial" }),
+    validRecord({ id: "3", status: "differs" }),
+  ]).label, "初步信号 · 结果混合");
+  assert.equal(getObservationSufficiency(Array.from({ length: 6 }, (_, index) => validRecord({ id: String(index), status: "matches" }))).level, "growing");
+  assert.equal(getObservationSufficiency(Array.from({ length: 9 }, (_, index) => validRecord({ id: String(index), status: "pending" }))).level, "insufficient", "待观察记录不应冒充已核对样本");
 });

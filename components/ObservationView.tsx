@@ -4,12 +4,14 @@ import { useMemo, useState } from "react";
 import type { FateChart } from "@/lib/types";
 import {
   createObservationRecord,
+  getObservationSufficiency,
   OBSERVATION_STATUS_META,
   type ObservationRecord,
   type ObservationStatus,
 } from "@/lib/observations";
 import { PrivacyConfirmDialog } from "@/components/shared/PrivacyConfirmDialog";
 import { deviceDateAfter, deviceToday } from "@/lib/birth";
+import { trackLocalEvent } from "@/lib/product";
 
 const STATUS_ORDER: ObservationStatus[] = ["matches", "partial", "differs", "uncertain"];
 type ObservationExportKind = "journal" | "calendar";
@@ -32,10 +34,16 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
   const [manualReviewOn, setManualReviewOn] = useState(deviceDateAfter(30));
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingExport, setPendingExport] = useState<ObservationExportKind | null>(null);
+  const today = deviceToday();
 
   const visibleRecords = useMemo(() => records
     .filter((record) => showAllProfiles || record.profileId === chart.profile.id)
-    .sort((a, b) => `${b.observedOn}${b.createdAt}`.localeCompare(`${a.observedOn}${a.createdAt}`)), [chart.profile.id, records, showAllProfiles]);
+    .sort((a, b) => {
+      const aDue = a.status === "pending" && !!a.reviewOn && a.reviewOn <= today;
+      const bDue = b.status === "pending" && !!b.reviewOn && b.reviewOn <= today;
+      if (aDue !== bDue) return aDue ? -1 : 1;
+      return `${b.observedOn}${b.createdAt}`.localeCompare(`${a.observedOn}${a.createdAt}`);
+    }), [chart.profile.id, records, showAllProfiles, today]);
   const reviewed = visibleRecords.filter((record) => record.status !== "pending");
   const scheduled = visibleRecords.filter((record) => record.reviewOn);
   const dueCount = scheduled.filter((record) => record.status === "pending" && record.reviewOn! <= deviceToday()).length;
@@ -46,6 +54,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
     differs: visibleRecords.filter((record) => record.status === "differs").length,
     uncertain: visibleRecords.filter((record) => record.status === "uncertain").length,
   };
+  const sufficiency = getObservationSufficiency(visibleRecords);
 
   const summary = !reviewed.length
     ? "先留下一个问题或一段真实经历。等事实发生后再回来核对，不必急着证明任何结论。"
@@ -58,6 +67,10 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
         : `已复盘 ${reviewed.length} 条，其中不符合记录较多。这些反例同样重要，可以帮助你判断哪些规则对自己并不适用。`;
 
   function update(id: string, change: Partial<ObservationRecord>) {
+    const previous = records.find((record) => record.id === id);
+    if (previous?.status === "pending" && change.status && change.status !== "pending") {
+      trackLocalEvent("observation_reviewed", { source: previous.source, status: change.status });
+    }
     onChange(records.map((record) => record.id === id ? {
       ...record,
       ...change,
@@ -142,7 +155,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
       </section>
 
       <section className="observation-summary">
-        <div className="summary-copy"><span>阶段复盘</span><h2>{visibleRecords.length ? `已留下 ${visibleRecords.length} 条观测` : "从第一条现实记录开始"}</h2><p>{summary}</p>{dueCount > 0 && <b className="review-due-badge">有 {dueCount} 条已到复盘日期</b>}</div>
+        <div className="summary-copy"><span>阶段复盘</span><h2>{visibleRecords.length ? `已留下 ${visibleRecords.length} 条观测` : "从第一条现实记录开始"}</h2><p>{summary}</p>{dueCount > 0 && <b className="review-due-badge">有 {dueCount} 条已到复盘日期，已置顶</b>}</div>
         <div className="summary-counts" aria-label="观测状态统计">
           <span><small>待观察</small><b>{counts.pending}</b></span>
           <span><small>符合</small><b>{counts.matches}</b></span>
@@ -150,6 +163,7 @@ export function ObservationView({ chart, records, onChange, onExplore }: {
           <span><small>不符合</small><b>{counts.differs}</b></span>
           <span><small>暂不确定</small><b>{counts.uncertain}</b></span>
         </div>
+        <aside className={`evidence-sufficiency level-${sufficiency.level}`}><small>记录充分度 · 不是准确率</small><b>{sufficiency.label}</b><p>{sufficiency.detail}</p></aside>
       </section>
 
       {manualOpen && <section className="manual-observation-form">

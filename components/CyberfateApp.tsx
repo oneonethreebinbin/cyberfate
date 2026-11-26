@@ -40,6 +40,7 @@ import {
   type ExpertMode,
   type ExploreMode,
   type ObservationIntent,
+  type ReadingDepth,
   type Tab,
   type ViewMode,
 } from "@/components/types";
@@ -61,12 +62,13 @@ export function CyberfateApp() {
   const [expertMode, setExpertMode] = useState<ExpertMode>("bazi");
   const [exploreMode, setExploreMode] = useState<ExploreMode>("self");
   const [intent, setIntent] = useState<ObservationIntent>("self");
+  const [readingDepth, setReadingDepth] = useState<ReadingDepth>("brief");
   const [hasResult, setHasResult] = useState(false);
   const [cityId, setCityId] = useState("");
   const [genderSelected, setGenderSelected] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
-  const [railCollapsed, setRailCollapsed] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(true);
   const [profile, setProfile] = useState<BirthProfile>(INITIAL_PROFILE);
   const [chart, setChart] = useState<FateChart | null>(null);
   const [history, setHistory] = useState<BirthProfile[]>([]);
@@ -169,6 +171,7 @@ export function CyberfateApp() {
     setChart(null);
     setHasResult(false);
     setTab("overview");
+    setReadingDepth("brief");
     startInput();
   }
 
@@ -181,6 +184,7 @@ export function CyberfateApp() {
       setCityId("beijing");
       setGenderSelected(true);
       setHasResult(true);
+      setReadingDepth("brief");
       setRailCollapsed(true);
       setMobileControlsOpen(false);
       navigateToTab("overview");
@@ -210,6 +214,7 @@ export function CyberfateApp() {
       setChart(result);
       setProfile(next);
       setHasResult(true);
+      setReadingDepth("brief");
       const records = [next, ...history.filter((item) => !(item.date === next.date && item.time === next.time && item.gender === next.gender))].slice(0, 8);
       setHistory(records);
       try { localStorage.setItem("cyberfate-history", JSON.stringify(records)); } catch { /* 会话内仍可使用 */ }
@@ -233,6 +238,7 @@ export function CyberfateApp() {
       setProfile(item);
       setChart(createFateChart(item));
       setHasResult(true);
+      setReadingDepth("brief");
       setGenderSelected(true);
       setCityId(cityIdForLongitude(item.longitude));
       setHistoryOpen(false);
@@ -398,7 +404,7 @@ export function CyberfateApp() {
       title,
       question,
       observedOn,
-      reviewOn: initial?.reviewOn ?? localDateAfter(30),
+      reviewOn: initial ? initial.reviewOn : localDateAfter(30),
     });
     updateObservations([{ ...record, status: initial?.status ?? record.status, note: initial?.note ?? record.note }, ...observations]);
     trackLocalEvent("observation_saved", { source });
@@ -441,13 +447,13 @@ export function CyberfateApp() {
 
         <div className={`workspace ${hasResult ? "has-result" : ""} ${railCollapsed ? "rail-collapsed" : ""}`}>
           <aside className="control-rail">
-            {hasResult && railCollapsed && <button className="desktop-rail-toggle" aria-expanded="false" aria-controls="birth-controls" onClick={() => setRailCollapsed(false)}><Icon name="compass" /><span>资料</span></button>}
+            {railCollapsed && <button className="desktop-rail-toggle" aria-expanded="false" aria-controls="birth-controls" onClick={() => setRailCollapsed(false)}><Icon name="compass" /><span>资料</span></button>}
             <button className="mobile-rail-toggle" aria-expanded={mobileControlsOpen} aria-controls="birth-controls" onClick={() => setMobileControlsOpen((value) => !value)}>
               <span><small>{hasResult ? "当前档案" : "准备起盘"}</small><strong>{hasResult ? (chart?.profile.name || "未命名命盘") : (profile.name || "填写出生资料")}</strong><em>{hasResult ? chart?.profile.date : (profile.date || "尚未选择日期")} · {(hasResult ? chart?.profile.timeKnown : profile.timeKnown) === false ? "时辰未知" : (hasResult ? chart?.profile.time : (profile.time || "尚未选择时间"))}</em></span>
               <b>{mobileControlsOpen ? "收起资料" : hasResult ? "修改资料" : "开始填写"}</b>
             </button>
             <div className={`rail-body ${mobileControlsOpen ? "mobile-open" : ""}`} id="birth-controls">
-              <div className="rail-heading"><div><span>出生资料</span><h2>生成观察</h2></div>{hasResult && <button className="rail-collapse-button" onClick={() => setRailCollapsed(true)} aria-label="收起出生资料">收起</button>}<p>只在浏览器本地计算，不上传生辰。</p></div>
+              <div className="rail-heading"><div><span>出生资料</span><h2>生成观察</h2></div><button className="rail-collapse-button" onClick={() => setRailCollapsed(true)} aria-label="收起出生资料">收起</button><p>只在浏览器本地计算，不上传生辰。</p></div>
               <div className="form-stack">
                 <label><span>档案名称 <small>选填</small></span><input value={profile.name} onChange={(event) => updateProfile("name", event.target.value)} placeholder="例如：我的命盘" /></label>
                 <div className="field-pair">
@@ -494,7 +500,7 @@ export function CyberfateApp() {
             <div className="view-container" id="view-panel" role={hasResult ? "tabpanel" : undefined} aria-labelledby={hasResult ? `view-tab-${tab}` : undefined}>
               {!hasResult && <OnboardingView intent={intent} onIntentChange={setIntent} onStart={startInput} onSample={showSample} />}
               {hasResult && resultStale && <section className="stale-result-notice" role="status"><div><span>结果待更新</span><h1>出生资料已修改</h1><p>当前结果仍基于上一次生成时的资料，尚未应用刚才的修改。请重新生成后再查看、导出或留下观察。</p></div><button disabled={!draftReady || isCalculating} onClick={generate}>{isCalculating ? "正在重新生成" : "按新资料重新生成"}</button></section>}
-              {hasResult && !resultStale && chart && tab === "overview" && (chart.profile.timeKnown === false ? <UnknownTimeOverview chart={chart} records={observations} onSave={saveLimitedObservation} onAddTime={requestKnownTime} /> : <Overview chart={chart} intent={intent} records={observations} onSaveInsight={saveInsight} onSaveGuidedObservation={saveGuidedObservation} onNavigate={navigateToTab} />)}
+              {hasResult && !resultStale && chart && tab === "overview" && (chart.profile.timeKnown === false ? <UnknownTimeOverview chart={chart} records={observations} onSave={saveLimitedObservation} onAddTime={requestKnownTime} /> : <Overview chart={chart} intent={intent} records={observations} readingDepth={readingDepth} onReadingDepthChange={setReadingDepth} onSaveInsight={saveInsight} onSaveGuidedObservation={saveGuidedObservation} onNavigate={navigateToTab} />)}
               {hasResult && !resultStale && chart && tab === "explore" && <ExplorationView chart={chart} mode={exploreMode} records={observations} onModeChange={setExploreMode} onSaveInsight={saveInsight} onSaveObservation={saveProductObservation} onNavigate={navigateToTab} />}
               {hasResult && !resultStale && chart && tab === "observations" && <ObservationView chart={chart} records={observations} onChange={updateObservations} onExplore={() => navigateToTab("overview")} />}
               {hasResult && !resultStale && chart && tab === "expert" && <ExpertView chart={chart} mode={expertMode} onModeChange={setExpertMode} />}
